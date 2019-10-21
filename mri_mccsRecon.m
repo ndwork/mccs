@@ -1,5 +1,5 @@
 
-function [recon,senseMaps] = mri_mccsRecon( kData, lambda, varargin )
+function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, varargin )
   % recon = mri_mccsRecon( kData, lambda [, 'maxOuterIter', maxOuterIter ] )
   %
   % Inputs:
@@ -7,6 +7,8 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda, varargin )
   %
   % Outputs:
   % recon - the final reconstructed volue
+  %
+  % Written by Nicholas Dwork, Copyright 2019
   %
   % https://github.com/ndwork/dworkLib.git
   %
@@ -17,37 +19,70 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda, varargin )
 
   p = inputParser;
   p.addRequired( 'kData', @isnumeric );
-  p.addRequired( 'lambda', @(x) isnumeric( x ) && numel(x) == 1 );
-  p.addParameter( 'maxOuterIter', 4, @ispositive );
+  p.addRequired( 'lambda_x', @(x) numel(x) == 1 && x >= 0 );
+  p.addRequired( 'lambda_s', @(x) numel(x) == 1 && x >= 0 );
+  p.addParameter( 'doCheckAdjoint', false, @islogical );
+  p.addParameter( 'kcf', 0.0035, @(x) x >= 0 && numel(x) == 1 );
+  p.addParameter( 'maxOuterIter', 1000, @ispositive );
+  p.addParameter( 'outDir', './out', @(x) true );
+  p.addParameter( 'range', [], @isnumeric );
   p.addParameter( 'verbose', false, @islogical );
-  p.parse( kData, lambda, varargin{:} );
+  p.parse( kData, lambda_x, lambda_s, varargin{:} );
+  doCheckAdjoint = p.Results.doCheckAdjoint;
+  kcf = p.Results.kcf;
   maxOuterIter = p.Results.maxOuterIter;
+  outDir = p.Results.outDir;
+  range = p.Results.range;
   verbose = p.Results.verbose;
-
-  kcf = 0.01;
 
   ssqRecon = mri_ssqRecon( kData );  % (Ny, Nx, nSlices, nCoils )
   recon = ssqRecon;
+
+  if verbose == true && ~exist( outDir, 'dir' ), mkdir( outDir ); end
+
   roughMaps = mccs_makeInitialSensitivityMap( kData );
   senseMaps = roughMaps;
+
+  if verbose == true
+    mapsFig = figure;
+    senseReconsFig = figure;
+    reconFig = figure;
+  end
 
   for iter = 1 : maxOuterIter
     disp([ 'Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
 
     % Determine the sensitivity maps
-    senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, 'initialGuess', senseMaps );
+    senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, ...
+      'initialGuess', senseMaps, 'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, ...
+      'maxIterOpt', 300 );
+
+    if verbose == true
+      figure( mapsFig );  showImageCube( abs( senseMaps ), 5 );
+      if numel( outDir ) > 0
+        saveas( mapsFig, [outDir, '/senseMaps_', indx2str(iter,maxOuterIter), '.png'] );
+      end
+
+      senseRecons = bsxfun( @times, senseMaps, recon );
+      figure( senseReconsFig );  showImageCube( abs(senseRecons), 5 );
+      if numel( outDir ) > 0
+        saveas( senseReconsFig, [outDir, '/senseRecons_', indx2str(iter,maxOuterIter), '.png'] );
+      end
+    end
 
     % Estimate the reconstructed image
-    recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda, ...
-      'verbose', verbose );
+    recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda_x, ...
+      'nIter', 100, 'initialGuess', recon, 'verbose', verbose );
 
+    if verbose == true
+      figure( reconFig ); imshowscale( abs(recon), 5, 'range', range );
+      titlenice([ 'recon ', num2str(iter) ]);  drawnow;
+      if numel( outDir ) > 0
+        saveas( reconFig, [outDir, '/recon_', indx2str(iter,maxOuterIter), '.png'] );
+        save( [outDir, '/mat_recon_', indx2str(iter,maxOuterIter), '.mat'], 'recon' );
+      end
+    end
   end
 
-  figure; imshowscale( recon, 5 );  titlenice( 'recon' );
-  figure; imshowscale( ssqRecon, 5 );  titlenice( 'ssqRecon' );
-  figure; showImageCube( senseMaps, 'border', 1, 'borderValue', 'max' );  titlenice( 'sense maps' );
-  figure; showImageCube( roughMaps, 'border', 1, 'borderValue', 'max' );  titlenice( 'rough maps' );
 end
-
-
 

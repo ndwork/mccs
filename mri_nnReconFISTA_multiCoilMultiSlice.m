@@ -1,6 +1,6 @@
 
-function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda, varargin )
-  % recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda [ , ...
+function recon = mri_nnReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda, varargin )
+  % recon = mri_nnReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda [ , ...
   %   'checkAdjoint', true/false ] )
   %
   % Inputs:
@@ -51,7 +51,8 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
   sliceGuess = [];
-  parfor sliceIndx = 1 : nSlices
+  %parfor sliceIndx = 1 : nSlices
+for sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     % TODO: parallelize this loop
     kData4Slice = squeeze( kData(:,:,sliceIndx,:) );
@@ -63,7 +64,7 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
       reconGuess = [];
     end
 
-    thisRecon = csReconFISTA_slice( kData4Slice, senseMapOfSlice, lambda, ...
+    thisRecon = nnReconFISTA_slice( kData4Slice, senseMapOfSlice, lambda, ...
       'reconGuess', reconGuess, 'nIter', nIter, 'printEvery', printEvery, 'waveletType', waveletType, ...
       'debug', debug, 'checkAdjoints', checkAdjoints, 'verbose', verbose );
     slices{sliceIndx} = thisRecon;
@@ -77,8 +78,8 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
 end
 
 
-function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
-  % recon = csReconFISTA_slice( samples, senseMaps, lambda [, 'debug', debug, 'nIter', nIter, ...
+function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
+  % recon = nnReconFISTA_slice( samples, senseMaps, lambda [, 'debug', debug, 'nIter', nIter, ...
   %   'polish', polish, 'printEvery', printEvery, 'verbose', verbose, ...
   %   'waveletType', waveletType ] )
   %
@@ -210,47 +211,21 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     out = Aadj( A( x ) ) - Aadjb;
   end
 
-  split = zeros(4);  split(1,1) = 1;
-  split = zeros(8);  split(1:2,1:2) = 1;  split(5,1) = 1;  split(1,5) = 1;  split(5,5) = 1;
-  %split = [1 0 0 0; 0 0 0 0; 0 0 0 0; 0 0 0 0;];
-  %split = [ 1 0; 0 0; ];
-
-  if strcmp( waveletType, 'Deaubechies' )
-    wavOp = @(x) wtDeaubechies2( x, split );
-    wavAdj = @(y) iwtDeaubechies2( y, split );
-
-  elseif strcmp( waveletType, 'Haar' )
-    wavOp = @(x) wtHaar2( x, split );
-    wavAdj = @(y) iwtHaar2( y, split );
-
-  else
-    error( 'Unrecognized wavelet type' );
-  end
-
-  function out = W( x )
-    out = zeros( size( x ) );
-    out(:,:,1) = wavOp( x(:,:,1) );  % Real
-    out(:,:,2) = wavOp( x(:,:,2) );  % Imag
-  end
-
-  function out = WT( x )
-    out = zeros( size( x ) );
-    out(:,:,1) = wavAdj( x(:,:,1) );
-    out(:,:,2) = wavAdj( x(:,:,2) );
-  end
-
   if checkAdjoints == true
     % Variable used during debugging of this routine
-    checkResult = csReconFISTA_checkAdjoints( samples, @W, @WT, @F, @Fadj, @A, @Aadj );
+    checkResult = nnReconFISTA_checkAdjoints( samples, @F, @Fadj, @A, @Aadj );
     if checkResult ~= false, disp([ 'Adjoints test passed' ]); end
   end
 
-  proxth = @(x,t) WT( softThresh( W(x), t*lambda ) );
+  function out = proxth( x, t )
+    xImg = reshape( x(:,:,1), [ Nx Ny ] ) + 1i * reshape( x(:,:,2), [ Nx Ny ] );
+    nn = proxNucNorm( xImg, t * lambda );
+    out = cat( 3, real( nn ), imag( nn ) );
+  end
 
   function out = h( x )
-    Wx = W(x);
-    Wx = Wx(:,:,1) + 1i * Wx(:,:,2);
-    out = lambda * sum( abs( Wx(:) ) );
+    xImg = reshape( x(:,:,1), [ Nx Ny ] ) + 1i * reshape( x(:,:,2), [ Nx Ny ] );
+    out = lambda * nucNorm( xImg );
   end
 
   if numel( reconGuess ) == 0
@@ -269,7 +244,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
         't0', t, 'N', nIter, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
     else
       %recon = fista( x0, @g, @gGrad, proxth );   %#ok<UNRCH>
-      recon = fista_wLS( x0, @g, @gGrad, proxth, 't0', t, 'N', nIter, ...
+      recon = fista_wLS( x0, @g, @gGrad, @proxth, 't0', t, 'N', nIter, ...
         'verbose', verbose, 'printEvery', printEvery );
     end
 
@@ -284,14 +259,10 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
 end
 
 
-function out = csReconFISTA_checkAdjoints( samples, W, WT, F, Fadj, A, Aadj )
+function out = nnReconFISTA_checkAdjoints( samples, F, Fadj, A, Aadj )
 
   sSamples = size( samples );
   imgRand = rand( [ sSamples(1:2) 2 ] );
-
-  if checkAdjoint( imgRand, W, WT ) ~= true
-    error( 'WT is not the transpose of W' );
-  end
 
   if checkAdjoint( imgRand, F, Fadj ) ~= true
     error( 'Fadj is not the adjoint of F' );
