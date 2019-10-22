@@ -50,7 +50,6 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
 
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
-  sliceGuess = [];
   parfor sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     % TODO: parallelize this loop
