@@ -45,7 +45,7 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, vara
   [ kxs, kys ] = meshgrid( ks{1}, ks{2} );
   kMag = sqrt( kxs .* kxs + kys .* kys );
   kBwMask = repmat( kMag < kcf, [ 1 1 nCoils ] );
-  kMask = squeeze( sum( kData, 3 ) ) ~= 0;
+  kMask = squeeze( sum( abs(kData), 3 ) ) ~= 0;
   nPix = Ny * Nx;
 
   function out = Z( x )
@@ -142,8 +142,11 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, vara
                        proxg3Conj( y( nb+nPix*nCoils+1 : end ), lambda_s ); ];
 
   function out = g( y )
-    out = 0.5 * norm( y(1:nb) - b(:) ).^2;  % Note, doesn't include indicator function
-    disp( 'NICK, YOU NEED TO ADD THIRD TERM HERE' );
+    y1 = y(1:nb);
+    %y2 = y( nb+1 : nb+nPix*nCoils );  % We will not include indiator function
+    y3 = y( nb+nPix*nCoils+1 : end );
+    S = reshape( y3, [ nPix, nCoils ] );
+    out = 0.5 * norm( y1 - b ).^2 + lambda_s * nucNorm( S );
   end
 
   senseMaps = zeros( Nx, Ny, nSlices, nCoils );
@@ -153,9 +156,6 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, vara
     b = sliceKData( kMask == 1 );
 
     fftSliceSenseMaps0 = fftSenseMaps0( :, sliceIndx );
-
-    %Ax0 = applyA( fftSliceSenseMaps0(:), 'notransp' );
-    %disp([ 'Error0: ', num2str( norm( Ax0(:) - sliceKData(:) ) ) ]);
 
     beta = 1;
     tau = 1d2;  % Works well
