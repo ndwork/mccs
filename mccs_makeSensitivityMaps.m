@@ -59,13 +59,11 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, vara
 
   function out = F( x )
     tmp = ifftshift( ifftshift( x, 1 ), 2 );   % iShiftedX
-    out = 1 / sqrt( nPix ) * fft( fft( tmp, [], 1 ), [], 2 );
-    out = fftshift( fftshift( out, 1 ), 2 );
+    out = 1 / sqrt( nPix ) * fftc( fftc( tmp, [], 1 ), [], 2 );
   end
 
   function out = Fadj( y )
-    tmp = ifftshift( ifftshift( y, 1 ), 2 );
-    out = sqrt( nPix ) * ifft( ifft( tmp, [], 1 ), [], 2 );
+    out = sqrt( nPix ) * ifftc( ifftc( y, [], 1 ), [], 2 );
     out = fftshift( fftshift( out, 1 ), 2 );
   end
 
