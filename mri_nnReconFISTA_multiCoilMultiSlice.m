@@ -35,14 +35,12 @@ function recon = mri_nnReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
   p.addParameter( 'nIter', [], @ispositive );
   p.addParameter( 'printEvery', 1, @ispositive );
   p.addParameter( 'verbose', false, @(x) isnumeric(x) || islogical(x) );
-  p.addParameter( 'waveletType', 'Deaubechies', @(x) true );
   p.parse( kData, senseMaps, lambda, varargin{:} );
   checkAdjoints = p.Results.checkAdjoints;
   debug = p.Results.debug;
   initialGuess = p.Results.initialGuess;
   nIter = p.Results.nIter;
   printEvery = p.Results.printEvery;
-  waveletType = p.Results.waveletType;
   verbose = p.Results.verbose;
   
 
@@ -50,9 +48,7 @@ function recon = mri_nnReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
 
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
-  sliceGuess = [];
-  %parfor sliceIndx = 1 : nSlices
-for sliceIndx = 1 : nSlices
+  parfor sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     % TODO: parallelize this loop
     kData4Slice = squeeze( kData(:,:,sliceIndx,:) );
@@ -65,7 +61,7 @@ for sliceIndx = 1 : nSlices
     end
 
     thisRecon = nnReconFISTA_slice( kData4Slice, senseMapOfSlice, lambda, ...
-      'reconGuess', reconGuess, 'nIter', nIter, 'printEvery', printEvery, 'waveletType', waveletType, ...
+      'reconGuess', reconGuess, 'nIter', nIter, 'printEvery', printEvery, ...
       'debug', debug, 'checkAdjoints', checkAdjoints, 'verbose', verbose );
     slices{sliceIndx} = thisRecon;
   end
@@ -80,12 +76,10 @@ end
 
 function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
   % recon = nnReconFISTA_slice( samples, senseMaps, lambda [, 'debug', debug, 'nIter', nIter, ...
-  %   'polish', polish, 'printEvery', printEvery, 'verbose', verbose, ...
-  %   'waveletType', waveletType ] )
+  %   'polish', polish, 'printEvery', printEvery, 'verbose', verbose ] )
   %
-  % This routine minimizes 0.5 * || Ax - b ||_2^2 + lambda || W x ||_1
-  %   where A is sampleMask * Fourier Transform * SenseMaps * [ real part; imag part; ],
-  %   and W is the wavelet transform.
+  % This routine minimizes 0.5 * || A x - b ||_2^2 + lambda || X ||_*
+  %   where A is sampleMask * Fourier Transform * SenseMaps * [ real part; imag part; ]..
   %
   % Inputs:
   % samples - a 2D array that is zero wherever a sample wasn't acquired
@@ -99,7 +93,6 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
   % polish - if set to true, adds a polishing step (default is false)
   % printEvery - FISTA prints a verbose statement every printEvery iterations
   % verbose - if true, prints informative statements
-  % waveletType - either 'Deaubechies' for Deaubechies-4 (default) or 'Haar'
   %
   % Written by Nicholas Dwork - Copyright 2019
   %
@@ -119,14 +112,12 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
   p.addParameter( 'printEvery', 1, @ispositive );
   p.addParameter( 'reconGuess', [], @isnumeric );
   p.addParameter( 'verbose', false, @(x) isnumeric(x) || islogical(x) );
-  p.addParameter( 'waveletType', 'Deaubechies', @(x) true );
   p.parse( samples, senseMaps, lambda, varargin{:} );
   checkAdjoints = p.Results.checkAdjoints;
   debug = p.Results.debug;
   nIter = p.Results.nIter;
   printEvery = p.Results.printEvery;
   reconGuess = p.Results.reconGuess;
-  waveletType = p.Results.waveletType;
   verbose = p.Results.verbose;
 
   if numel( nIter ) == 0

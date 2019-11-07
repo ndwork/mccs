@@ -55,7 +55,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, varargin 
     % Determine the sensitivity maps
     senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, ...
       'initialGuess', senseMaps, 'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, ...
-      'maxIterOpt', 300 );
+      'maxIterOpt', 200 );
 
     if verbose == true
       figure( mapsFig );  showImageCube( abs( senseMaps ), 5 );
@@ -72,7 +72,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, varargin 
 
     % Estimate the reconstructed image
     recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda_x, ...
-      'nIter', 100, 'initialGuess', recon, 'verbose', verbose );
+      'nIter', 50, 'initialGuess', recon, 'verbose', verbose );
 
     if verbose == true
       figure( reconFig ); imshowscale( abs(recon), 5, 'range', range );
