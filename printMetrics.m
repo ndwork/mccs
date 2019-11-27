@@ -1,10 +1,12 @@
 
-function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTitle, varargin )
+function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTitle, outDir, varargin )
 
   p = inputParser;
   p.addOptional( 'trueRecon', [], @isnumeric );
+  p.addParameter( 'senseMaps', [], @isnumeric );
   p.parse( varargin{:} );
   trueRecon = p.Results.trueRecon;
+  senseMaps = p.Results.senseMaps;
 
   if max( abs( recon(:) ) ) == 0
     normAbsRecon = recon;
@@ -33,4 +35,22 @@ function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTi
     datacase, sampleFraction, nSamples, mdmScore, mdmScore2, niqeScore, piqeScore, mse );
   fclose( logID );
 
+  figH = figure; imshowscale( abs(recon), 5 );  title( imgTitle );
+  saveas( figH, [ outDir, '/recon_', imgTitle, '.png' ] );  close( figH );
+
+  if numel( senseMaps ) > 0
+    mapsFig = figure;  showImageCube( abs( senseMaps ), 5 );
+    saveas( mapsFig, [outDir, '/senseMaps_', imgTitle, '.png'] );  close( mapsFig );
+
+    senseRecons = bsxfun( @times, senseMaps, recon );
+    senseReconsFig = figure;  showImageCube( abs(senseRecons), 5 );
+    saveas( senseReconsFig, [outDir, '/senseRecons_', imgTitle, '.png'] );
+    close( senseReconsFig );
+
+    save( [ outDir, '/recon_', imgTitle, '.mat', 'recon', 'senseMaps' );
+
+  else
+
+    save( [ outDir, '/recon_', imgTitle, '.mat', 'recon' );
+  end
 end
