@@ -1,39 +1,60 @@
 
 
-function out = sakeRecon2D( kData )
+function out = sakeRecon2D( kData, varargin )
+  % out = sakeRecon2D( kData [, 'type', type ] )
+  %
   % Inputs:
   % kData is [ nx X ny X nSlices X nc ]
+  %
+  % Optional Inputs:
+  % type - default is espiritL1; alternative is espirit
+  %
+  % Output - reconstructed volume
+  %
+  % Written by Nicholas Dwork - Copyright 2019
+  %
+  % This software is offered under the GNU General Public License 3.0.  It
+  % is offered without any warranty expressed or implied, including the
+  % implied warranties of merchantability or fitness for a particular
+  % purpose.
 
-  p = path();
+  p = inputParser;
+  p.addParameter( 'type', 'espirit', @(x) true );
+  p.parse( varargin{:} );
+  type = p.Results.type;
+
+  origPath = path();
   addpath( genpath( '.' ) );
-  
+
   nSlices = size( kData, 3 );
-  
+
   out = cell( 1, 1, nSlices );
   %parfor sliceIndx = 1 : nSlices
 for sliceIndx = 1 : nSlices
-    out{1,1,sliceIndx} = sakeReconSlice( squeeze( kData(:,:,sliceIndx,:) ) );   %#ok<PFBNS>
+    out{1,1,sliceIndx} = sakeReconSlice( squeeze( kData(:,:,sliceIndx,:) ), type );   %#ok<PFBNS>
   end
   out = cell2mat( out );
 
-  path( p );  % restore original path
+  path( origPath );  % restore original path
 end
 
 
-function out = sakeReconSlice( kData )
-  % Inputs:
-  % kData is [nx X ny X nc]
+function out = sakeReconSlice( kData, type )
+  % Input: kData is [nx X ny X nc]
 
   ncalib = 48;
   ksize = [6,6]; % ESPIRiT kernel-window-size
   sakeIter = 100;
   wnthresh = 1.8; % Window-normalized number of singular values to threshold
   eigThresh_im = 0.9; % threshold of eigenvectors in image space
+  splitWeight = 0.4;  % reasonable value
+  lambda = 0.0025;    % L1-Wavelet threshold
+  nIterSplit = 15;    % number of splitting iterations for CS part
 
   [sx,sy,Nc] = size(kData);
 
   mask = kData ~= 0;
-  kData = kData/max(max(max(abs(ifft2c(kData))))) + eps;
+  kData = kData / max(max(max(abs(ifft2c(kData))))) + eps;
   kDataC = kData .* mask;
 
   calibc = crop( kDataC, [ncalib,ncalib,Nc] );
@@ -62,7 +83,16 @@ function out = sakeReconSlice( kData )
   ESP = ESPIRiT( maps, weights );
   nIterCG = 15; 
 
-  [~, out] = cgESPIRiT(kDataC,ESP, nIterCG, 0.01,kDataC*0);
-  out = out(:,:,2);
+  if strcmp( type, 'espirit' )
+    [~, out] = cgESPIRiT( kDataC, ESP, nIterCG, 0.01, kDataC*0 );
 
+  elseif strcmp( type, 'espiritL1' )
+    XOP = Wavelet('Daubechies_TI',4,6);
+    FT = p2DFT( mask, [sx,sy,Nc] );
+    tmp = zeros( size( kDataC, 1 ), size( kDataC, 2 ), 2 );
+    out = cgL1ESPIRiT( kDataC, tmp, FT, ESP, nIterCG, XOP, lambda, splitWeight, nIterSplit );
+
+  end
+
+  out = out(:,:,2);
 end
