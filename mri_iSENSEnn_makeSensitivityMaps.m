@@ -7,7 +7,7 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   %
   % Inputs:
   % recon - the current reconstructed image
-  % kData - the k-space data collected from the MRI machine
+  % kData - the k-space data collecconjSliceReconted from the MRI machine
   %   ( kx, ky, slice, coil )
   %
   % Outputs:
@@ -43,6 +43,43 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
     senseMaps0 = permute( initialGuess, [1 2 4 3] );
   else
     senseMaps0 = ones( Nx, Ny, nCoils, nSlices );
+  end
+
+  if checkAdjoints == true
+    tmp = rand( Nx, Ny, nCoils );
+    sliceRecon = rand( Nx, Ny ) + 1i * rand( Nx, Ny );
+    conjSliceRecon = conj( sliceRecon );
+    if ~checkAdjoint( tmp, @F, @Fadj ), error( 'F and Fadj are not adjoints' ); end    
+    if ~checkAdjoint( tmp, @X, @Xadj ), error( 'X and Xadj are not adjoints' ); end
+    if ~checkAdjoint( tmp, @R, @Radj ), error( 'R and Radj are not adjoints' ); end
+    if ~checkAdjoint( tmp, @A, @Aadj ), error( 'A and Aadj are not adjoints' ); end
+  end
+
+  senseMaps = zeros( Nx, Ny, nSlices, nCoils );
+  t = 1;
+  for sliceIndx = 1 : nSlices
+    sliceKData = squeeze( kData( :, :, sliceIndx, : ) );
+    b = sliceKData( kMask == 1 );
+
+    sliceRecon = recon(:,:,sliceIndx);
+    conjSliceRecon = conj( sliceRecon );
+    Aadjb = Aadj( b );
+    sliceSenseMaps0 = senseMaps0( :, :, :, sliceIndx );
+
+    printEvery = 1;
+    if debug == true
+      %[x,oValues] = fista( sliceSenseMaps0, @g, @gGrad, proxth, 'h', @h, ...
+      %  'N', maxIterOpt, 'verbose', verbose );   %#ok<ASGLU>
+      [x,oValues] = fista_wLS( sliceSenseMaps0, @g, @gGrad, proxth, 'h', @h, ...
+        't0', t, 'N', maxIterOpt, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
+    else
+      %x = fista( x0, @g, @gGrad, proxth, 'N', maxIterOpt );   %#ok<UNRCH>
+      x = fista_wLS( sliceSenseMaps0, @g, @gGrad, @proxth, 't0', t, 'N', maxIterOpt, ...
+        'verbose', verbose, 'printEvery', printEvery );
+    end
+
+    sliceSenseMap = reshape( x, [ Nx Ny nCoils ] );
+    senseMaps(:,:,sliceIndx,:) = sliceSenseMap;
   end
 
   function out = X( in )
@@ -81,16 +118,6 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
     out = Xadj( Fadj( Radj( in ) ) );
   end
 
-  if checkAdjoints == true
-    tmp = rand( Nx, Ny, nCoils );
-    sliceRecon = rand( Nx, Ny ) + 1i * rand( Nx, Ny );
-    conjSliceRecon = conj( sliceRecon );
-    if ~checkAdjoint( tmp, @F, @Fadj ), error( 'F and Fadj are not adjoints' ); end    
-    if ~checkAdjoint( tmp, @X, @Xadj ), error( 'X and Xadj are not adjoints' ); end
-    if ~checkAdjoint( tmp, @R, @Radj ), error( 'R and Radj are not adjoints' ); end
-    if ~checkAdjoint( tmp, @A, @Aadj ), error( 'A and Aadj are not adjoints' ); end
-  end
-
   function out = g( s )
     S = reshape( s, [ Nx Ny nCoils ] );
     AS = A( S );
@@ -115,32 +142,5 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
     for coil = 1 : nCoils
       out(:,:,coil) = proxNucNorm( in(:,:,coil), t * lambda_s );
     end
-  end
-
-  senseMaps = zeros( Nx, Ny, nSlices, nCoils );
-  t = 1;
-  for sliceIndx = 1 : nSlices
-    sliceKData = squeeze( kData( :, :, sliceIndx, : ) );
-    b = sliceKData( kMask == 1 );
-
-    Aadjb = Aadj( b );
-    sliceRecon = recon(:,:,sliceIndx);
-    conjSliceRecon = conj( sliceRecon );
-    sliceSenseMaps0 = senseMaps0( :, :, :, sliceIndx );
-
-    printEvery = 1;
-    if debug == true
-      %[x,oValues] = fista( sliceSenseMaps0, @g, @gGrad, proxth, 'h', @h, ...
-      %  'N', maxIterOpt, 'verbose', verbose );   %#ok<ASGLU>
-      [x,oValues] = fista_wLS( sliceSenseMaps0, @g, @gGrad, proxth, 'h', @h, ...
-        't0', t, 'N', maxIterOpt, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
-    else
-      %x = fista( x0, @g, @gGrad, proxth, 'N', maxIterOpt );   %#ok<UNRCH>
-      x = fista_wLS( sliceSenseMaps0, @g, @gGrad, @proxth, 't0', t, 'N', maxIterOpt, ...
-        'verbose', verbose, 'printEvery', printEvery );
-    end
-
-    sliceSenseMap = reshape( x, [ Nx Ny nCoils ] );
-    senseMaps(:,:,sliceIndx,:) = sliceSenseMap;
   end
 end
