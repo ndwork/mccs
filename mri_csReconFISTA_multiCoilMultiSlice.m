@@ -33,6 +33,7 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
   p.addParameter( 'debug', false, @(x) isnumeric(x) || islogical(x) );
   p.addParameter( 'initialGuess', [], @isnumeric );
   p.addParameter( 'nIter', [], @ispositive );
+  p.addParameter( 'noiseCov', [], @isnumeric );
   p.addParameter( 'printEvery', 1, @ispositive );
   p.addParameter( 'verbose', false, @(x) isnumeric(x) || islogical(x) );
   p.addParameter( 'waveletType', 'Deaubechies', @(x) true );
@@ -41,16 +42,17 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
   debug = p.Results.debug;
   initialGuess = p.Results.initialGuess;
   nIter = p.Results.nIter;
+  noiseCov = p.Results.noiseCov;
   printEvery = p.Results.printEvery;
   waveletType = p.Results.waveletType;
   verbose = p.Results.verbose;
-  
 
   [ Nx, Ny, nSlices, ~ ] = size( kData );
 
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
-  parfor sliceIndx = 1 : nSlices
+  %parfor sliceIndx = 1 : nSlices
+for sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     % TODO: parallelize this loop
     kData4Slice = squeeze( kData(:,:,sliceIndx,:) );
@@ -62,9 +64,11 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
       reconGuess = [];
     end
 
-    thisRecon = csReconFISTA_slice( kData4Slice, senseMapOfSlice, lambda, ...
-      'reconGuess', reconGuess, 'nIter', nIter, 'printEvery', printEvery, 'waveletType', waveletType, ...
-      'debug', debug, 'checkAdjoints', checkAdjoints, 'verbose', verbose );
+    thisRecon = csReconFISTA_slice( kData4Slice, senseMapOfSlice, ...
+      lambda, 'reconGuess', reconGuess, 'nIter', nIter, ...
+      'waveletType', waveletType, 'noiseCov', noiseCov, ...
+      'printEvery', printEvery, 'debug', debug, ...
+      'checkAdjoints', checkAdjoints, 'verbose', verbose );
     slices{sliceIndx} = thisRecon;
   end
   parforObj.clean;
@@ -113,6 +117,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
   p.addRequired( 'lambda', @(x) x >= 0 );
   p.addParameter( 'checkAdjoints', false, @islogical );
   p.addParameter( 'debug', false, @(x) isnumeric(x) || islogical(x) );
+  p.addParameter( 'noiseCov', [], @isnumeric );
   p.addParameter( 'nIter', [], @(x) ispositive(x) || numel(x) == 0 );
   p.addParameter( 'printEvery', 1, @ispositive );
   p.addParameter( 'reconGuess', [], @isnumeric );
@@ -121,6 +126,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
   p.parse( samples, senseMaps, lambda, varargin{:} );
   checkAdjoints = p.Results.checkAdjoints;
   debug = p.Results.debug;
+  noiseCov = p.Results.noiseCov;
   nIter = p.Results.nIter;
   printEvery = p.Results.printEvery;
   reconGuess = p.Results.reconGuess;
@@ -137,6 +143,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
 
   [ Nx, Ny, nCoils ] = size( samples );
   M = ( sum( abs(samples), 3 ) ~= 0 );
+  nM = sum( M(:) );
   nSamples = Nx * Ny;  % Note that A is square
 
   % S is the tall block matrix, where each block is the diagonal matrix of
@@ -147,70 +154,122 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
   % gGrad = A' A x - A' b;
 
   function out = F( x )
-    Fx = 1/sqrt(nSamples) .* fftshift( fft2( ifftshift( ...
-      x(:,:,1) + 1i * x(:,:,2) ) ) );
-    out = cat( 3, real(Fx), imag(Fx) );
+    out = 1/sqrt(nSamples) .* fftshift( fft2( ifftshift( x ) ) );
   end
 
   function out = Fadj( y )
-    Fadjy = sqrt(nSamples) * ...
-      fftshift( ifft2( ifftshift( y(:,:,1) + 1i * y(:,:,2) ) ) );
-    out = cat( 3, real(Fadjy), imag(Fadjy) );
+    out = sqrt(nSamples) * fftshift( ifft2( ifftshift( y ) ) );
   end
 
-  M2 = cat( 3, M, M );
-
   function out = A( x )
-    out = zeros([ Nx Ny nCoils 2]);
-    xComplex = x(:,:,1) + 1i * x(:,:,2);
-    for coilIndx = 1 : nCoils
-      Sx = senseMaps(:,:,coilIndx) .* xComplex;
-      Sx = cat( 3, real(Sx), imag(Sx) );
-      MFSx = M2 .* F( Sx );
-      out(:,:,coilIndx,1) = MFSx(:,:,1);
-      out(:,:,coilIndx,2) = MFSx(:,:,2);
+    out = zeros( nM, 1 );
+    for c = 1 : nCoils
+      Sx = senseMaps(:,:,c) .* x;
+      FSx = F( Sx );
+      MFSx = FSx( M == 1 );
+      out( (c-1)*nM + 1 : c*nM ) = MFSx;
     end
   end
 
   function out = Aadj( y )
-    out = zeros([ Nx Ny ]);
-    for coilIndx = 1 : nCoils
-      My = M2 .* squeeze( y(:,:,coilIndx,:) );
+    out = zeros( Nx, Ny );
+    My = zeros( Nx, Ny );
+    for c = 1 : nCoils
+      My( M == 1 ) = y( (c-1)*nM + 1 : c * nM );
       FadjMy = Fadj( My );
-      FadjMy = FadjMy(:,:,1) + 1i * FadjMy(:,:,2);
-      sAdjFadjMy = conj(senseMaps(:,:,coilIndx)) .* FadjMy;
+      sAdjFadjMy = conj( senseMaps(:,:,c) ) .* FadjMy;
       out = out + sAdjFadjMy;
     end
-    out = cat( 3, real(out), imag(out) );
   end
 
   function out = applyA( x, type )
     if nargin < 2, type = 'notransp'; end
 
     if strcmp( type, 'notransp' )
-      x = reshape( x, [Nx Ny 2] );
+      x = reshape( x, [ Nx Ny ] );
       out = A( x );
     else
-      x = reshape( x, [Nx, Ny, nCoils, 2] );
+      x = reshape( x, [ Nx, Ny, nCoils ] );
       out = Aadj( x );
     end
     out = out(:);
   end
 
-  b = cat( 4, real(samples), imag(samples) );
+  if numel( noiseCov ) > 0
+    invNoiseCov = inv( noiseCov );
+    [~,s,~] = svd( invNoiseCov, 'econ' );
+    invNoiseCov = invNoiseCov ./ s(1);
+  end
+  function out = applyInvNoiseCov( in, type )
+    if numel( noiseCov ) == 0, out = in; return; end
+
+    % Assumes last dimension is coil dimension
+    if nargin < 2, type = 'notransp'; end
+
+    sIn = size( in );
+    reshaped = reshape( in, [ prod( sIn(1:end-1) ) sIn(end) ] );
+    if strcmp( type, 'notransp' )
+      out = transpose( invNoiseCov * transpose( reshaped ) );
+    else
+      out = transpose( invNoiseCov' * transpose( reshaped ) );
+    end
+    out = reshape( out, sIn );
+  end
+
+
+  b = zeros( nM, nCoils );
+  for coilIndx = 1 : nCoils
+    coilSamples = samples( :, :, coilIndx );
+    b( :, coilIndx ) = coilSamples( M == 1 );
+  end
+  b = b(:);
+ 
   function out = g( x )
     Ax = A( x );
     diff = Ax - b;
-    out = 0.5 * norm( diff(:), 2 ).^2;
+    if numel( noiseCov ) > 0
+      NInvDiff = applyInvNoiseCov( reshape( diff, [ nM nCoils ] ) );
+      out = real( 0.5 * diff' * NInvDiff(:) );
+    else
+      out = 0.5 * norm( diff(:), 2 )^2;
+    end
   end
 
-  Aadjb = Aadj( b );
+  if numel( noiseCov ) > 0
+    NInvb = applyInvNoiseCov( reshape( b, [ nM nCoils ] ) );
+    AadjMb = Aadj( NInvb(:) );
+  else
+    Aadjb = Aadj( b );
+  end
   function out = gGrad( x )
-    out = Aadj( A( x ) ) - Aadjb;
+    if numel( noiseCov ) > 0
+      Ax = A( x );
+      NInvAx = applyInvNoiseCov( reshape( Ax, [ nM nCoils ] ) );
+      out = Aadj( NInvAx(:) ) - AadjMb;
+    else
+      out = Aadj( A( x ) ) - Aadjb;
+    end
   end
 
-  split = zeros(4);  split(1,1) = 1;
-  split = zeros(8);  split(1:2,1:2) = 1;  split(5,1) = 1;  split(1,5) = 1;  split(5,5) = 1;
+  if numel( reconGuess ) == 0
+    x0 = mri_ssqRecon( samples );
+  else
+    x0 = reconGuess;
+  end
+
+  [ yTmp, xTmp ] = size( x0 );
+  splitSize = -1;
+  while  ( mod( xTmp, 1 ) == 0 )  &&  ( mod( yTmp, 1 ) == 0 )
+    splitSize = splitSize + 1;
+    xTmp = xTmp / 2;  yTmp = yTmp / 2;
+  end
+  splitSize = splitSize - 1;
+  splitSize = min( splitSize, 8 );
+  split = zeros( splitSize );
+  split(1) = 1;
+
+  %split = zeros(4);  split(1,1) = 1;
+  %split = zeros(8);  split(1:2,1:2) = 1;  split(5,1) = 1;  split(1,5) = 1;  split(5,5) = 1;
   %split = [1 0 0 0; 0 0 0 0; 0 0 0 0; 0 0 0 0;];
   %split = [ 1 0; 0 0; ];
 
@@ -226,38 +285,17 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     error( 'Unrecognized wavelet type' );
   end
 
-  function out = W( x )
-    out = zeros( size( x ) );
-    out(:,:,1) = wavOp( x(:,:,1) );  % Real
-    out(:,:,2) = wavOp( x(:,:,2) );  % Imag
-  end
-
-  function out = WT( x )
-    out = zeros( size( x ) );
-    out(:,:,1) = wavAdj( x(:,:,1) );
-    out(:,:,2) = wavAdj( x(:,:,2) );
-  end
-
   if checkAdjoints == true
     % Variable used during debugging of this routine
-    checkResult = csReconFISTA_checkAdjoints( samples, @W, @WT, @F, @Fadj, @A, @Aadj );
+    checkResult = csReconFISTA_checkAdjoints( samples, wavOp, wavAdj, @F, @Fadj, @A, @Aadj );
     if checkResult ~= false, disp([ 'Adjoints test passed' ]); end
   end
 
-  proxth = @(x,t) WT( softThresh( W(x), t*lambda ) );
+  proxth = @(x,t) wavAdj( softThresh( wavOp(x), t*lambda ) );
 
   function out = h( x )
-    Wx = W(x);
-    Wx = Wx(:,:,1) + 1i * Wx(:,:,2);
+    Wx = wavOp(x);
     out = lambda * sum( abs( Wx(:) ) );
-  end
-
-  if numel( reconGuess ) == 0
-    x0 = zeros( Nx, Ny, 2 );
-    ssqRecon = mri_ssqRecon( samples );
-    x0(:,:,1) = sqrt( ssqRecon );
-  else
-    x0 = cat( 3, real(reconGuess), imag(reconGuess) );
   end
 
   if lambda > 0
@@ -273,32 +311,22 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     end
 
   else
-
-    recon = lsqr( @applyA, b(:), [], [], [], [], x0(:) );
-    recon = reshape( recon, [Ny Nx 2] );
+    recon = lsqr( @applyA, b, [], [], [], [], x0(:) );
 
   end
 
-  recon = recon(:,:,1) + 1i * recon(:,:,2);
 end
 
 
 function out = csReconFISTA_checkAdjoints( samples, W, WT, F, Fadj, A, Aadj )
 
   sSamples = size( samples );
-  imgRand = rand( [ sSamples(1:2) 2 ] );
+  %imgRand = rand( [ sSamples(1:2) 2 ] );
+  imgRand = rand( sSamples(1:2) ) + 1i * rand( sSamples(1:2) );
 
-  if checkAdjoint( imgRand, W, WT ) ~= true
-    error( 'WT is not the transpose of W' );
-  end
-
-  if checkAdjoint( imgRand, F, Fadj ) ~= true
-    error( 'Fadj is not the adjoint of F' );
-  end
-
-  if checkAdjoint( imgRand, A, Aadj ) ~= true
-    error( 'Aadj is not the adjoint of A' );
-  end
+  if checkAdjoint( imgRand, W, WT ) ~= true, error( 'WT is not the transpose of W' ); end
+  if checkAdjoint( imgRand, F, Fadj ) ~= true, error( 'Fadj is not the adjoint of F' ); end
+  if checkAdjoint( imgRand, A, Aadj ) ~= true, error( 'Aadj is not the adjoint of A' ); end
 
   out = true;
 end
