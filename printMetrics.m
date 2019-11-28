@@ -47,10 +47,10 @@ function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTi
     saveas( senseReconsFig, [outDir, '/senseRecons_', imgTitle, '.png'] );
     close( senseReconsFig );
 
-    save( [ outDir, '/recon_', imgTitle, '.mat' ], 'recon', 'senseMaps' );
+    save( [ outDir, '/mat_recon_', imgTitle, '.mat' ], 'recon', 'senseMaps' );
 
   else
 
-    save( [ outDir, '/recon_', imgTitle, '.mat' ], 'recon' );
+    save( [ outDir, '/mat_recon_', imgTitle, '.mat' ], 'recon' );
   end
 end

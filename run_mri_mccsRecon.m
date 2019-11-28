@@ -2,8 +2,8 @@
 function run_mri_mccsRecon
   close all; clear; rng(1);
 
-  %datacases = [ 3 1 7 2 5 8 6 ];
-datacases = 3;
+  %datacases = [ 1 2 3 5 6 7 8 ];
+datacases = [ 5 8 1 2 3 6 7 ];
 
   doCheckAdjoint = false;
   simCase = 1;
@@ -13,8 +13,7 @@ vdSigma = 0.3;
   maxOuterIter = 100;
   useNoiseCov = true;
 
-  %sampleFractions = [ 0.1 0.15 0.2 0.25 0.3 0.4 ];
-sampleFractions = 0.3;
+  sampleFractions = [ 0.1 0.15 0.2 0.25 0.3 0.4 ];
 
   %lambda_x = 5d-4;  % 1d-5 works well without noise covariance
   %lambda_s = 1d-4;
@@ -38,16 +37,40 @@ sampleFractions = 0.3;
     end
     sub_kData = sub_kData ./ max( abs( sub_kData(:) ) );
 
-    if datacase == 3
-      %kcf = 0.008;
-      kcf = 0.015;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    else
+    if datacase == 1
       kcf = 0.005;
       lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    elseif datacase == 2
+      kcf = 0.005;
+      lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    elseif datacase == 3
+      kcf = 0.008;
+      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    elseif datacase == 5
+      kcf = 0.005;
+      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    elseif datacase == 6
+      kcf = 0.008;
+      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    elseif datacase == 7
+      kcf = 0.008;
+      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    else
+      kcf = 0.005;
+      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
     end
 
@@ -88,8 +111,7 @@ sampleFractions = 0.3;
       'sakeL1EspiritRecon', datacaseDir, ssqRecon_fullySampled );
 
     nSamples = sum( mask(:) );
-    %parfor sampleFractionIndx = 1 : numel( sampleFractions )
-for sampleFractionIndx = 1 : numel( sampleFractions )
+    parfor sampleFractionIndx = 1 : numel( sampleFractions )
       sampleFraction = sampleFractions( sampleFractionIndx );
       lambda_x = lambda_xs( sampleFractionIndx );
       lambda_s = lambda_ss( sampleFractionIndx );
@@ -123,6 +145,10 @@ for sampleFractionIndx = 1 : numel( sampleFractions )
       printMetrics( logFile, datacase, sampleFraction, nSamples, ssqRecon, 'undersampledSsq', ...
         outDir, ssqRecon_fullySampled );
 
+      sakeL1EspiritRecon = sakeRecon2D( kData, 'type', 'espiritL1' );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeL1EspiritRecon, 'sakeL1EspiritRecon', ...
+        outDir, ssqRecon_fullySampled );
+
       [mccsRecon,mccsMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, 'kcf', kcf, ...
         'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov, 'verbose', verbose, ...
         'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/mccs/' ] );
@@ -139,17 +165,13 @@ for sampleFractionIndx = 1 : numel( sampleFractions )
         outDir, ssqRecon_fullySampled, 'senseMaps', nnMaps );
 
       [iSENSEnn_Recon,iSENSEnn_Maps] = mri_iSENSEnn( kData, labmda_iSENSEnn_x, labmda_iSENSEnn_s, ...
-        'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/iSENSEnn/' ] );   %#ok<ASGLU>
+        'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/iSENSEnn/' ] );
       printMetrics( logFile, datacase, sampleFraction, nSamples, iSENSEnn_Recon, 'iSENSEnn_Recon', ...
         outDir, ssqRecon_fullySampled, 'senseMaps', iSENSEnn_Maps );
 
       sakeEspiritRecon = sakeRecon2D( kData, 'type', 'espirit' );
       printMetrics( logFile, datacase, sampleFraction, nSamples, sakeEspiritRecon, 'sakeEspiritRecon', ...
-        outDir, ssqRecon_fullySampled);
-
-      sakeL1EspiritRecon = sakeRecon2D( kData, 'type', 'espiritL1' );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeL1EspiritRecon, 'sakeL1EspiritRecon', ...
-        outDir, ssqRecon_fullySampled);
+        outDir, ssqRecon_fullySampled );
     end
   end
 end

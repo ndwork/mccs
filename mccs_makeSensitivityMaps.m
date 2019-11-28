@@ -107,9 +107,14 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
     end
   end
 
+%winY = kaiser( Ny, 5 );
+%winX = kaiser( Nx, 5 );
+%coilWin = winY' * winX;
+
   function out = applyA2( in, type )
     if strcmp( type, 'notransp' )
       s = reshape( in, [ Ny Nx nCoils ] );
+      %Hs = bsxfun( @times, s, coilWin );
       Fs = F( s );
       DbwFs = Fs( kBwMask == 0 );
       out = sqrt( lambda_h ) * DbwFs;
@@ -118,6 +123,7 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
       tmp( kBwMask == 0 ) = in;
       DbwIn = sqrt( lambda_h ) * tmp;
       out = Fadj( DbwIn );
+      %out = bsxfun( @times, FadjDbwIn, coilWin );
     end
   end
 
