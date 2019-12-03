@@ -44,9 +44,12 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   verbose = p.Results.verbose;
 
   ssqRecon = mri_ssqRecon( kData );  % (Ny, Nx, nSlices, nCoils )
-  [ Ny, Nx ] = size( ssqRecon );
-  nPix = Ny * Nx;
   recon = ssqRecon;
+  %sakeEspiritL1Recon = sakeRecon2D( kData, 'type', 'espiritL1' );  % (Ny, Nx, nSlices, nCoils )
+  %recon = sakeEspiritL1Recon;
+
+  [ Ny, Nx ] = size( recon );
+  nPix = Ny * Nx;
 
   if verbose == true && ~exist( outDir, 'dir' ), mkdir( outDir ); end
 
@@ -67,7 +70,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
 
     % Determine the sensitivity maps
     senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lambda_h, ...
-      'initialGuess', senseMaps, 'noiseCov', noiseCov, 'maxIterOpt', 60, ...
+      'initialGuess', senseMaps, 'noiseCov', noiseCov, 'maxIterOpt', 90, ...
       'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint );
 
     if verbose == true

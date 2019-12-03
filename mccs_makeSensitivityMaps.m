@@ -42,14 +42,16 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
 
   [ Ny, Nx, nSlices, nCoils ] = size( kData );
   nPix = Ny * Nx;
-  ks = size2fftCoordinates( [ Ny Nx ] );
-  [ kxs, kys ] = meshgrid( ks{1}, ks{2} );
-  kMag = sqrt( kxs .* kxs + kys .* kys );
-  kBwMask = repmat( kMag < kcf, [ 1 1 nCoils ] );
   kMask = squeeze( sum( abs(kData), 3 ) ) ~= 0;
   nb = sum( kMask(:) );
   kMaskCoil = sum( abs( kMask ), 3 ) > 0;
   nbPerCoil = sum( kMaskCoil(:) );
+
+  ks = size2fftCoordinates( 2 * [ Ny Nx ] );
+  [ kxs, kys ] = meshgrid( ks{1}, ks{2} );
+  kMag = sqrt( kxs .* kxs + kys .* kys );
+  kBwMask = repmat( kMag < kcf, [ 1 1 nCoils ] );
+  nHighFreq = sum( kBwMask(:) == 0 );
 
   if numel( noiseCov ) > 0
     invNoiseCov = inv( noiseCov );
@@ -75,17 +77,18 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
 
   function out = F( x )
     iShiftedX = ifftshift( ifftshift( x, 1 ), 2 );
-    out = 1 / sqrt( nPix ) * fftc( fftc( iShiftedX, [], 1 ), [], 2 );
+    out = 1 / sqrt( size(x,1) * size(x,2) ) * fftc( fftc( iShiftedX, [], 1 ), [], 2 );
   end
 
   function out = Fadj( y )
-    out = sqrt( nPix ) * ifftc( ifftc( y, [], 1 ), [], 2 );
+    out = sqrt( size(y,1) * size(y,2) ) * ifftc( ifftc( y, [], 1 ), [], 2 );
     out = fftshift( fftshift( out, 1 ), 2 );
   end
 
   function out = applyA1( in, type )
     if strcmp( type, 'notransp' )
-      Xin = bsxfun( @times, in, recon );
+      cropped = cropData( in, [ Ny Nx nCoils ] );
+      Xin = bsxfun( @times, cropped, recon );
       FXin = F( Xin );
       DFXin = FXin( kMask == 1 );
       if numel( noiseCov ) > 0
@@ -103,7 +106,8 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
       DTLin = zeros( Ny, Nx, nCoils );
       DTLin( kMask == 1 ) = Lin(:);
       FadjDTLin = Fadj( DTLin );
-      out = bsxfun( @times, FadjDTLin, conj( recon ) );
+      XconjFadjDTLin = bsxfun( @times, FadjDTLin, conj( recon ) );
+      out = padData( XconjFadjDTLin, [ 2*Ny 2*Nx nCoils ] );
     end
   end
 
@@ -113,13 +117,13 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
 
   function out = applyA2( in, type )
     if strcmp( type, 'notransp' )
-      s = reshape( in, [ Ny Nx nCoils ] );
+      s = reshape( in, [ 2*Ny 2*Nx nCoils ] );
       %Hs = bsxfun( @times, s, coilWin );
       Fs = F( s );
       DbwFs = Fs( kBwMask == 0 );
       out = sqrt( lambda_h ) * DbwFs;
     else
-      tmp = zeros( Ny, Nx, nCoils );
+      tmp = zeros( 2*Ny, 2*Nx, nCoils );
       tmp( kBwMask == 0 ) = in;
       DbwIn = sqrt( lambda_h ) * tmp;
       out = Fadj( DbwIn );
@@ -132,14 +136,14 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
     if nargin < 2, type = 'notransp'; end
 
     if strcmp( type, 'notransp' )
-      Ain1 = applyA1( reshape( in, [ Ny Nx nCoils ] ), type );
-      Ain2 = applyA2( reshape( in, [ Ny Nx nCoils ] ), type );
+      Ain1 = applyA1( reshape( in, [ 2*Ny 2*Nx nCoils ] ), type );
+      Ain2 = applyA2( reshape( in, [ 2*Ny 2*Nx nCoils ] ), type );
       out = [ Ain1(:); Ain2(:); in(:); ];
 
     else
       y1 = in( 1 : nb );
       y2 = in( nb + 1 : nb + nHighFreq );
-      y3 = in( nb + nHighFreq + 1 : nb + nHighFreq + nPix*nCoils );
+      y3 = in( nb + nHighFreq + 1 : nb + nHighFreq + 4*nPix*nCoils );
 
       AT1 = applyA1( y1, type );
       AT2 = applyA2( y2, type );
@@ -155,11 +159,12 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
     if ~checkAdjoint( kBwMask, @applyA ), error('checkAdjoint failed'); end
   end
 
-  f = @(s) lambda_s * nucNorm( reshape( s, [ nPix nCoils ] ) );
+  f = @(s) lambda_s * nucNorm( reshape( s, [ 4*nPix nCoils ] ) );
+
   function out = g( y )
     y1 = y( 1 : nb );
     y2 = y( nb + 1 : nb + nHighFreq );
-    y3 = y( nb + nHighFreq + 1 : nb + nHighFreq + nPix*nCoils );  %#ok<NASGU>
+    y3 = y( nb + nHighFreq + 1 : nb + nHighFreq + 4*nPix*nCoils );  %#ok<NASGU>
 
     out1 = 0.5 * norm( y1 - LStarb(:) )^2;
     out2 = 0.5 * norm( y2 )^2;
@@ -170,14 +175,14 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
   end
 
   function out = proxf( y, t )
-    out = proxNucNorm( reshape( y, [ nPix nCoils ] ), t * lambda_s );
+    out = proxNucNorm( reshape( y, [ 4*nPix nCoils ] ), t * lambda_s );
     out = out(:);
   end
 
   function out = proxgConj( y, t )
     y1 = y( 1 : nb );
     y2 = y( nb + 1 : nb + nHighFreq );
-    y3 = y( nb + nHighFreq + 1 : nb + nHighFreq + nPix*nCoils );
+    y3 = y( nb + nHighFreq + 1 : nb + nHighFreq + 4*nPix*nCoils );
 
     out1 = ( y1 - t * LStarb(:) ) ./ ( t + 1 );
     out2 = y2 ./ ( t + 1 );
@@ -194,7 +199,8 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
   senseMaps = initialGuess;
   for sliceIndx = 1 : nSlices
     sliceKData = squeeze( kData( :, :, sliceIndx, : ) );
-    sliceGuess = squeeze( initialGuess( :, :, sliceIndx, : ) );
+    sliceGuess = padData( squeeze( ...
+      initialGuess( :, :, sliceIndx, : ) ), [ 2*Ny 2*Nx nCoils ] );
 
     bKData = reshape( sliceKData, [nPix nCoils] );
     b = bKData( kMaskCoil(:) == 1, : );
@@ -210,8 +216,8 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
         'beta', beta, 'N', maxIterOpt, 'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint );
     end
 
-    sliceSenseMap = reshape( x, [ Nx Ny nCoils ] );
-    senseMaps(:,:,sliceIndx,:) = sliceSenseMap;
+    sliceSenseMap = reshape( x, [ 2*Ny 2*Nx nCoils ] );
+    senseMaps(:,:,sliceIndx,:) = cropData( sliceSenseMap, [ Ny Nx nCoils ] );
 
     %Ax = applyA( x(:), 'notransp' );
     %disp([ 'Error: ', num2str( norm( Ax(:) - sliceKData(:) ) ) ]);
