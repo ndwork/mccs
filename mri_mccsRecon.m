@@ -65,7 +65,17 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
     fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMap\n' );
   end
 
-  for iter = 1 : maxOuterIter
+  % Check to see if there was previous processing to take advantage of
+  if exist( [outDir, '/mat_recon.mat'], 'file' )
+    load( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
+    senseIter = iter;
+    load( [outDir, '/mat_recon.mat'], 'recon', 'iter' );
+    if iter ~= senseIter, error( 'Something went wrong with saving' ); end
+  else
+    iter = 1;
+  end
+
+  while iter < maxOuterIter
     disp([ 'Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
 
     % Determine the sensitivity maps
@@ -77,7 +87,6 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
       figure( mapsFig );  showImageCube( abs( senseMaps ), 5 );
       if numel( outDir ) > 0
         saveas( mapsFig, [outDir, '/senseMaps_', indx2str(iter,maxOuterIter), '.png'] );
-        save( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
         if mod( iter, 10 ) == 0
           save( [outDir, '/mat_senseMaps_', indx2str(iter,maxOuterIter), '.mat'], 'senseMaps' );
         end
@@ -100,6 +109,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
       titlenice([ 'recon ', num2str(iter) ]);  drawnow;
       if numel( outDir ) > 0
         saveas( reconFig, [outDir, '/recon_', indx2str(iter,maxOuterIter), '.png'] );
+        save( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
         save( [outDir, '/mat_recon.mat'], 'recon', 'iter' );
         if mod( iter, 10 ) == 0
           save( [outDir, '/mat_recon_', indx2str(iter,maxOuterIter), '.mat'], 'recon' );
@@ -123,6 +133,8 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
         niqeScore, piqeScore, maxSenseMapMag );
     end
     if maxAbsRecon == 0, return; end
+
+    iter = iter + 1;
   end
 
 end
