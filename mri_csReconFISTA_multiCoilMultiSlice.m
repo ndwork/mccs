@@ -256,12 +256,12 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
   end
 
   [ yTmp, xTmp ] = size( x0 );
-  splitSize = -1;
+  splitSize = 1;
   while  ( mod( xTmp, 1 ) == 0 )  &&  ( mod( yTmp, 1 ) == 0 )
-    splitSize = splitSize + 1;
+    splitSize = splitSize * 2;
     xTmp = xTmp / 2;  yTmp = yTmp / 2;
   end
-  splitSize = splitSize - 1;
+  splitSize = splitSize / 2;
   splitSize = min( splitSize, 8 );
   split = zeros( splitSize );
   split(1) = 1;
