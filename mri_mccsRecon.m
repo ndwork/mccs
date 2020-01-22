@@ -33,6 +33,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   p.addParameter( 'noiseCov', [], @isnumeric );
   p.addParameter( 'outDir', './out', @(x) true );
   p.addParameter( 'range', [], @isnumeric );
+  p.addParameter( 'showScale', 2, @ispositive );
   p.addParameter( 'verbose', false, @islogical );
   p.parse( kData, lambda_x, lambda_s, varargin{:} );
   doCheckAdjoint = p.Results.doCheckAdjoint;
@@ -41,6 +42,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   noiseCov = p.Results.noiseCov;
   outDir = p.Results.outDir;
   range = p.Results.range;
+  showScale = p.Results.showScale;
   verbose = p.Results.verbose;
 
   ssqRecon = mri_ssqRecon( kData );  % (Ny, Nx, nSlices, nCoils )
@@ -57,14 +59,6 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   %roughMaps = mri_makeSensitivityMaps( kData );
   senseMaps = roughMaps;
 
-  if verbose == true
-    mapsFig = figure;
-    senseReconsFig = figure;
-    reconFig = figure;
-    logID = fopen( [outDir, '/mccs.log' ], 'w' );
-    fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMap\n' );
-  end
-
   % Check to see if there was previous processing to take advantage of
   if exist( [outDir, '/mat_recon.mat'], 'file' )
     load( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
@@ -74,6 +68,19 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   else
     iter = 1;
   end
+  
+  if verbose == true
+    mapsFig = figure;
+    senseReconsFig = figure;
+    reconFig = figure;
+    if iter ~= 1
+      logID = fopen( [outDir, '/mccs.log' ], 'a' );
+    else
+      logID = fopen( [outDir, '/mccs.log' ], 'w' );
+    end
+    fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMag\n' );
+  end
+  
 
   while iter < maxOuterIter
     disp([ 'Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
@@ -84,7 +91,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
       'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint );
 
     if verbose == true
-      figure( mapsFig );  showImageCube( abs( senseMaps ), 5 );
+      figure( mapsFig );  showImageCube( abs( senseMaps ), showScale );
       if numel( outDir ) > 0
         saveas( mapsFig, [outDir, '/senseMaps_', indx2str(iter,maxOuterIter), '.png'] );
         if mod( iter, 10 ) == 0
@@ -93,7 +100,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
       end
 
       senseRecons = bsxfun( @times, senseMaps, recon );
-      figure( senseReconsFig );  showImageCube( abs(senseRecons), 5 );
+      figure( senseReconsFig );  showImageCube( abs(senseRecons), showScale );
       if numel( outDir ) > 0
         saveas( senseReconsFig, [outDir, '/senseRecons_', indx2str(iter,maxOuterIter), '.png'] );
       end
@@ -105,7 +112,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
 
     maxAbsRecon = max( abs( recon(:) ) );
     if verbose == true
-      figure( reconFig ); imshowscale( abs(recon), 5, 'range', range );
+      figure( reconFig ); imshowscale( abs(recon), showScale, 'range', range );
       titlenice([ 'recon ', num2str(iter) ]);  drawnow;
       if numel( outDir ) > 0
         saveas( reconFig, [outDir, '/recon_', indx2str(iter,maxOuterIter), '.png'] );

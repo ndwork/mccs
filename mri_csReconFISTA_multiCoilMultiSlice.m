@@ -261,7 +261,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     splitSize = splitSize * 2;
     xTmp = xTmp / 2;  yTmp = yTmp / 2;
   end
-  splitSize = splitSize / 2;
+  splitSize = splitSize / 4;
   splitSize = min( splitSize, 8 );
   split = zeros( splitSize );
   split(1) = 1;

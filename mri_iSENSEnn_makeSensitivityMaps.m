@@ -8,7 +8,7 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   % Inputs:
   % recon - the current reconstructed image
   % kData - the k-space data collecconjSliceReconted from the MRI machine
-  %   ( kx, ky, slice, coil )
+  %   ( ky, kx, slice, coil )
   %
   % Outputs:
   % senseMaps - the sensitivity maps
@@ -35,19 +35,19 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   maxIterOpt = p.Results.maxIterOpt;
   verbose = p.Results.verbose;
 
-  [ Nx, Ny, nSlices, nCoils ] = size( kData );
+  [ Ny, Nx, nSlices, nCoils ] = size( kData );
   kMask = squeeze( sum( abs(kData), 3 ) ) ~= 0;
   nPix = Nx * Ny;
 
   if numel( initialGuess ) ~= 0
     senseMaps0 = permute( initialGuess, [1 2 4 3] );
   else
-    senseMaps0 = ones( Nx, Ny, nCoils, nSlices );
+    senseMaps0 = ones( Ny, Nx, nCoils, nSlices );
   end
 
   if checkAdjoints == true
-    tmp = rand( Nx, Ny, nCoils );
-    sliceRecon = rand( Nx, Ny ) + 1i * rand( Nx, Ny );
+    tmp = rand( Ny, Nx, nCoils );
+    sliceRecon = rand( Ny, Nx ) + 1i * rand( Ny, Nx );
     conjSliceRecon = conj( sliceRecon );
     if ~checkAdjoint( tmp, @F, @Fadj ), error( 'F and Fadj are not adjoints' ); end    
     if ~checkAdjoint( tmp, @X, @Xadj ), error( 'X and Xadj are not adjoints' ); end
@@ -55,7 +55,7 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
     if ~checkAdjoint( tmp, @A, @Aadj ), error( 'A and Aadj are not adjoints' ); end
   end
 
-  senseMaps = zeros( Nx, Ny, nSlices, nCoils );
+  senseMaps = zeros( Ny, Nx, nSlices, nCoils );
   t = 1;
   for sliceIndx = 1 : nSlices
     sliceKData = squeeze( kData( :, :, sliceIndx, : ) );
@@ -78,7 +78,7 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
         'verbose', verbose, 'printEvery', printEvery );
     end
 
-    sliceSenseMap = reshape( x, [ Nx Ny nCoils ] );
+    sliceSenseMap = reshape( x, [ Ny Nx nCoils ] );
     senseMaps(:,:,sliceIndx,:) = sliceSenseMap;
   end
 
@@ -119,13 +119,13 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   end
 
   function out = g( s )
-    S = reshape( s, [ Nx Ny nCoils ] );
+    S = reshape( s, [ Ny Nx nCoils ] );
     AS = A( S );
     out = 0.5 * norm( AS(:) - b, 2 )^2;
   end
 
   function out = gGrad( x )
-    X = reshape( x, [ Nx Ny nCoils ] );
+    X = reshape( x, [ Ny Nx nCoils ] );
     out = Aadj( A( X ) ) - Aadjb;
   end
 
@@ -138,7 +138,7 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   end
 
   function out = proxth( in, t )
-    out = zeros( Nx, Ny, nCoils );
+    out = zeros( Ny, Nx, nCoils );
     for coil = 1 : nCoils
       out(:,:,coil) = proxNucNorm( in(:,:,coil), t * lambda_s );
     end

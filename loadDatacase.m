@@ -11,7 +11,10 @@ function [data,noiseCoords] = loadDatacase( datacase )
   %
   % Written by Nicholas Dwork, Copyright 2019
 
-  dataDir = '/Users/nicholasdwork/.DellEMS/Vols/disk2s1';
+  dataDir = '/Users/nicholasdwork/.DellEMS/Vols/disk2s1/cartesian3d/';
+  if ~exist( dataDir, 'dir' )
+    dataDir = '/Users/ndwork/Documents/Data/cartesian3d/';
+  end
 
   switch datacase
 
@@ -76,6 +79,30 @@ function [data,noiseCoords] = loadDatacase( datacase )
       data = ifftc( data, [], 3 );
       data = data(:,:,64,:);
       noiseCoords = [ 1 1 70 70 ];
+
+    case 9
+      % Ankle, 256 x 256
+      [data,header] = read_MR_rawdata( [ dataDir, '/body3d/P26112.7' ] );   %#ok<ASGLU>
+      data = squeeze( data );
+      data = ifftc( data, [], 3 );
+      data = data(:,:,80,:);
+      noiseCoords = [ 10 10 80 80 ];
+
+    case 10
+      % shoulder, 
+      [data,header] = read_MR_rawdata( [ dataDir, '/body3d/P23040.7' ] );   %#ok<ASGLU>
+      data = squeeze( data );
+      data = ifftc( data, [], 3 );
+      data = data(:,:,245,:);
+      noiseCoords = [ 10 10 60 60 ];
+
+    case 11
+      % Ankle, 256 x 256
+      [data,header] = read_MR_rawdata( [ dataDir, '/body3d/P27648.7' ] );   %#ok<ASGLU>
+      data = squeeze( data );
+      data = ifftc( data, [], 3 );
+      data = data(:,:,50,:);
+      noiseCoords = [ 10 10 100 100 ];
 
     otherwise
       error( 'This datacase doesn''t exist' );

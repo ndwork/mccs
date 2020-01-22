@@ -48,7 +48,7 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lamb
   nbPerCoil = sum( kMaskCoil(:) );
 
   ks = size2fftCoordinates( 2 * [ Ny Nx ] );
-  [ kxs, kys ] = meshgrid( ks{1}, ks{2} );
+  [ kxs, kys ] = meshgrid( ks{2}, ks{1} );
   kMag = sqrt( kxs .* kxs + kys .* kys );
   kBwMask = repmat( kMag < kcf, [ 1 1 nCoils ] );
   nHighFreq = sum( kBwMask(:) == 0 );
