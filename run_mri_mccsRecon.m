@@ -2,92 +2,63 @@
 function run_mri_mccsRecon
   close all; clear; rng(1);
 
-  %datacases = [ 1 2 3 5 6 7 8 ];
-datacases = [ 5 8 1 2 3 6 7 ];
+  datacases = [ 0, 1, 2, 6, 11, 5, 9, 3, 7, 8, 10 ];
+  % Note, datacase 0 means simulation
 
   doCheckAdjoint = false;
-  simCase = 1;
-  doSimulation = false;
-  %vdSigma = 0.25;
-vdSigma = 0.3;
-  maxOuterIter = 100;
-  useNoiseCov = true;
+  simCase = 2;
+  vdSigma = 0.3;
+  maxOuterIter = 50;
 
-  sampleFractions = [ 0.1 0.15 0.2 0.25 0.3 0.4 ];
-
-  %lambda_x = 5d-4;  % 1d-5 works well without noise covariance
-  %lambda_s = 1d-4;
-
-  labmda_iSENSEnn_x = 1d-3;
-  labmda_iSENSEnn_s = 1d-2;
+  sampleFractions = [ 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 ];
   verbose = true;
 
+  if ~exist( 'sub_kData', 'dir' ), mkdir( 'sub_kData' ); end
+  if ~exist( 'fullySampledSenseMaps', 'dir' ), mkdir( 'fullySampledSenseMaps' ); end
 
   for datacase = datacases
-    if doSimulation == true
-      [ sub_kData, senseMaps ] = loadSimData( simCase );  %#ok<ASGLU>
+    dataMatFile = [ 'sub_kData/sub_kData_', indx2str(datacase,99), '.mat' ];
+    if exist( dataMatFile, 'file' )
+      loadData = false;
+      [ ~, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_x, ...
+        lambda_iSENSEnn_s, lambda_csSENSE, lambda_nnSENSE, trueRecon ] = loadDatacase( ...
+        datacase, sampleFractions, loadData, 'simCase', simCase );
+      load( dataMatFile, 'sub_kData' );
     else
-      dataMatFile = [ 'sub_kData_', indx2str(datacase,99), '.mat' ];
-      if exist( dataMatFile, 'file' )
-        load( dataMatFile, 'sub_kData', 'noiseCoords' );
-      else
-        [sub_kData,noiseCoords] = loadDatacase( datacase );
-        save( dataMatFile, 'sub_kData', 'noiseCoords' );
-      end
+      loadData = true;
+      [ sub_kData, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_x, ...
+        lambda_iSENSEnn_s, lambda_csSENSE, lambda_nnSENSE, trueRecon ] = loadDatacase( ...
+        datacase, sampleFractions, loadData, 'simCase', simCase );
+      save( dataMatFile, 'sub_kData' );
     end
-    sub_kData = sub_kData ./ max( abs( sub_kData(:) ) );
 
-    if datacase == 1
-      kcf = 0.005;
-      lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    elseif datacase == 2
-      kcf = 0.005;
-      lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    elseif datacase == 3
-      kcf = 0.008;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    elseif datacase == 5
-      kcf = 0.005;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    elseif datacase == 6
-      kcf = 0.008;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
-    elseif datacase == 7
-      kcf = 0.008;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+    if datacase == 0
+      useNoiseCov = false;
     else
-      kcf = 0.005;
-      lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+      useNoiseCov = true;
+    end
+
+    sub_kData = sub_kData ./ max( abs( sub_kData(:) ) );
+    if numel( trueRecon ) > 0
+      trueRecon = trueRecon ./ max( abs( sub_kData(:) ) );
     end
 
     datacaseDir = [ './out/datacase_', indx2str(datacase,100) ];
     if ~exist( datacaseDir, 'dir' ), mkdir( datacaseDir ); end
     logFile = [ datacaseDir, '/metrics.log' ];
     logID = fopen( logFile, 'w' );
-    fprintf( logID, 'datacase, sampleFraction, nSamples, type, mdm, mdm-2, niqe, piqe\n' );
+    fprintf( logID, [ 'datacase, sampleFraction, nSamples, type, mdm, mdm-2, niqe, ', ...
+      'piqe, mse, mae, correlation, angleErr, mi \n' ] );
     fclose( logID );
 
     mask = mri_makeIntensityMask( sub_kData );
-    fullySampledSenseMapsMatFile = ['fullySampledSenseMaps_', indx2str(datacase,99), '.mat' ];
-    if exist( fullySampledSenseMapsMatFile, 'file' )
-      load( fullySampledSenseMapsMatFile, 'fullySampledSenseMaps' );
-    else
+    fullySampledSenseMapsMatFile = ['fullySampledSenseMaps/fullySampledSenseMaps_', ...
+      indx2str(datacase,99), '.mat' ];
+    if ~exist( fullySampledSenseMapsMatFile, 'file' )
       fullySampledSenseMaps = mri_makeSensitivityMaps( sub_kData, 'mask', mask, 'verbose', verbose );
       save( fullySampledSenseMapsMatFile, 'fullySampledSenseMaps' );
+    else
+      load( fullySampledSenseMapsMatFile, 'fullySampledSenseMaps' );
     end
 
     fftRecon_fullySampled = mri_fftRecon( sub_kData, 'multiSlice', true );
@@ -102,15 +73,21 @@ vdSigma = 0.3;
       noiseCov = [];
     end
 
-    ssqRecon_fullySampled = mri_ssqRecon( sub_kData, 'multiSlice', true);
-    printMetrics( logFile, datacase, 1.0, numel(mask), ssqRecon_fullySampled, ...
-      'ssqFullySampled', datacaseDir, 'senseMaps', fullySampledSenseMaps );
 
     fullySampledSakeL1EspiritRecon = sakeRecon2D( sub_kData, 'type', 'espiritL1' );
+    if numel( trueRecon ) == 0
+      trueRecon = fullySampledSakeL1EspiritRecon;
+    else
+      printMetrics( logFile, datacase, 1.0, numel(mask), trueRecon, ...
+        'trueRecon', datacaseDir, trueRecon );
+    end
     printMetrics( logFile, datacase, 1.0, numel(mask), fullySampledSakeL1EspiritRecon, ...
-      'sakeL1EspiritRecon', datacaseDir, ssqRecon_fullySampled );
+      'sakeL1Espirit', datacaseDir, trueRecon );
 
-    nSamples = sum( mask(:) );
+    ssqRecon_fullySampled = mri_ssqRecon( sub_kData, 'multiSlice', true);
+    printMetrics( logFile, datacase, 1.0, numel(mask), ssqRecon_fullySampled, ...
+      'ssqFullySampled', datacaseDir, trueRecon, 'senseMaps', fullySampledSenseMaps );
+
     parfor sampleFractionIndx = 1 : numel( sampleFractions )
       sampleFraction = sampleFractions( sampleFractionIndx );
       lambda_x = lambda_xs( sampleFractionIndx );
@@ -120,19 +97,20 @@ vdSigma = 0.3;
       outDir = [ datacaseDir, '/', num2str(sampleFraction,'%3.2f') ];
       if ~exist( outDir, 'dir' ), mkdir( outDir ); end
 
-      [ Nx, Ny, nSlices, nCoils ] = size( sub_kData );
-      sMask = [ Nx Ny ];
+      [ Ny, Nx, nSlices, nCoils ] = size( sub_kData );
+      sMask = [ Ny Nx ];
       if sampleFraction == 1
         vdMask = ones( sMask );
       else
         sampleGoal = round( sampleFraction*prod(sMask) );
-        vdMask = vdSampleMask( sMask, vdSigma*max(Nx,Ny), sampleGoal );
+        vdMask = vdSampleMask( sMask, vdSigma * [Ny, Nx], sampleGoal );
       end
       kMask = sum( sum( abs( sub_kData ), 3), 4 ) ~= 0;
       vdMask = vdMask & kMask;
       maskFig = figure;  imshowscale( vdMask, 5 );
       saveas( maskFig, [outDir, '/sampleMask.png'] );
       close( maskFig );
+      nSamples = sum( vdMask(:) );
 
       kData = sub_kData;
       for slice=1:nSlices
@@ -141,37 +119,42 @@ vdSigma = 0.3;
         end
       end
 
-      ssqRecon = mri_ssqRecon( kData );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, ssqRecon, 'undersampledSsq', ...
-        outDir, ssqRecon_fullySampled );
+      ssqRecon = mri_ssqRecon( kData, 'multiSlice', true );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, ssqRecon, ...
+        'undersampledSsq', outDir, trueRecon );
+
+      [iSENSEnn_Recon,iSENSEnn_Maps] = mri_iSENSEnn( kData, lambda_iSENSEnn_x, lambda_iSENSEnn_s, ...
+        'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/iSENSEnn/' ] );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, iSENSEnn_Recon, 'iSENSEnn', ...
+        outDir, trueRecon, 'senseMaps', iSENSEnn_Maps );
+
+      senseLoraksRecon = mri_senseLoraks( kData );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, senseLoraksRecon, ...
+        'senseLoraks', outDir, trueRecon );
 
       sakeL1EspiritRecon = sakeRecon2D( kData, 'type', 'espiritL1' );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeL1EspiritRecon, 'sakeL1EspiritRecon', ...
-        outDir, ssqRecon_fullySampled );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeL1EspiritRecon, ...
+        'sakeL1Espirit', outDir, trueRecon );
 
-      [mccsRecon,mccsMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, 'kcf', kcf, ...
-        'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov, 'verbose', verbose, ...
-        'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/mccs/' ] );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, mccsRecon, 'mccsRecon', ...
-        outDir, ssqRecon_fullySampled, 'senseMaps', mccsMaps );
+      [sparseSenseRecon,senseMaps] = mri_csSenseRecon( kData, lambda_csSENSE, 'verbose', verbose );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, sparseSenseRecon, 'sparseSense', ...
+        outDir, trueRecon, 'senseMaps', senseMaps );
 
-      [csSenseRecon,senseMaps] = mri_csSenseRecon( kData, labmda_iSENSEnn_x, 'verbose', verbose );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, csSenseRecon, 'csSense', ...
-        outDir, ssqRecon_fullySampled, 'senseMaps', senseMaps );
-
-      [nnSenseRecon,nnMaps] = mri_nnSenseRecon( kData, labmda_iSENSEnn_x, 'senseMaps', senseMaps, ...
+      [nnSenseRecon,nnMaps] = mri_nnSenseRecon( kData, lambda_nnSENSE, 'senseMaps', senseMaps, ...
         'verbose', verbose );
       printMetrics( logFile, datacase, sampleFraction, nSamples, nnSenseRecon, 'nnSense', ...
-        outDir, ssqRecon_fullySampled, 'senseMaps', nnMaps );
-
-      [iSENSEnn_Recon,iSENSEnn_Maps] = mri_iSENSEnn( kData, labmda_iSENSEnn_x, labmda_iSENSEnn_s, ...
-        'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, 'outDir', [ outDir, '/iSENSEnn/' ] );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, iSENSEnn_Recon, 'iSENSEnn_Recon', ...
-        outDir, ssqRecon_fullySampled, 'senseMaps', iSENSEnn_Maps );
+        outDir, trueRecon, 'senseMaps', nnMaps );
 
       sakeEspiritRecon = sakeRecon2D( kData, 'type', 'espirit' );
-      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeEspiritRecon, 'sakeEspiritRecon', ...
-        outDir, ssqRecon_fullySampled );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, sakeEspiritRecon, ...
+        'sakeEspiritRecon', outDir, trueRecon );
+
+      mccsDir = [ outDir, '/mccs' ];
+      [mccsRecon,mccsMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, noiseCoords, ...
+        'kcf', kcf, 'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov, 'verbose', verbose, ...
+        'doCheckAdjoint', doCheckAdjoint, 'outDir', mccsDir );
+      printMetrics( logFile, datacase, sampleFraction, nSamples, mccsRecon, 'mccs', ...
+        outDir, trueRecon, 'senseMaps', mccsMaps );
     end
   end
 end

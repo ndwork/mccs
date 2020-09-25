@@ -34,7 +34,7 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
   p.addParameter( 'initialGuess', [], @isnumeric );
   p.addParameter( 'nIter', [], @ispositive );
   p.addParameter( 'noiseCov', [], @isnumeric );
-  p.addParameter( 'printEvery', 1, @ispositive );
+  p.addParameter( 'printEvery', 10, @ispositive );
   p.addParameter( 'verbose', false, @(x) isnumeric(x) || islogical(x) );
   p.addParameter( 'waveletType', 'Deaubechies', @(x) true );
   p.parse( kData, senseMaps, lambda, varargin{:} );
@@ -51,7 +51,8 @@ function recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
 
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
-  parfor sliceIndx = 1 : nSlices
+  %parfor sliceIndx = 1 : nSlices
+for sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     kData4Slice = squeeze( kData(:,:,sliceIndx,:) );
     senseMapOfSlice = squeeze( senseMaps(:,:,sliceIndx,:) );
@@ -117,7 +118,7 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
   p.addParameter( 'debug', false, @(x) isnumeric(x) || islogical(x) );
   p.addParameter( 'noiseCov', [], @isnumeric );
   p.addParameter( 'nIter', [], @(x) ispositive(x) || numel(x) == 0 );
-  p.addParameter( 'printEvery', 1, @ispositive );
+  p.addParameter( 'printEvery', 10, @ispositive );
   p.addParameter( 'reconGuess', [], @isnumeric );
   p.addParameter( 'verbose', false, @(x) isnumeric(x) || islogical(x) );
   p.addParameter( 'waveletType', 'Deaubechies', @(x) true );
@@ -255,16 +256,8 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     x0 = reconGuess;
   end
 
-  [ yTmp, xTmp ] = size( x0 );
-  splitSize = 1;
-  while  ( mod( xTmp, 1 ) == 0 )  &&  ( mod( yTmp, 1 ) == 0 )
-    splitSize = splitSize * 2;
-    xTmp = xTmp / 2;  yTmp = yTmp / 2;
-  end
-  splitSize = splitSize / 4;
-  splitSize = min( splitSize, 8 );
-  split = zeros( splitSize );
-  split(1) = 1;
+  split = makeWavSplit( size( x0 ) );
+%split = zeros(8);  split(1,1) = 1;
 
   %split = zeros(4);  split(1,1) = 1;
   %split = zeros(8);  split(1:2,1:2) = 1;  split(5,1) = 1;  split(1,5) = 1;  split(5,5) = 1;
@@ -289,29 +282,31 @@ function recon = csReconFISTA_slice( samples, senseMaps, lambda, varargin )
     if checkResult ~= false, disp([ 'Adjoints test passed' ]); end
   end
 
-  proxth = @(x,t) wavAdj( softThresh( wavOp(x), t*lambda ) );
+  %proxth = @(x,t) wavAdj( softThresh( wavOp(x), t*lambda ) );
+  function out = proxth( x, t )
+    out = wavAdj( softThresh( wavOp(x), t*lambda ) );
+  end
 
   function out = h( x )
     Wx = wavOp(x);
     out = lambda * sum( abs( Wx(:) ) );
   end
 
-  if lambda > 0
+  %if lambda > 0
     t = 1;
     if debug
       %[recon,oValues] = fista( x0, @g, @gGrad, proxth, 'h', @h, 'verbose', verbose );   %#ok<ASGLU>
-      [recon,oValues] = fista_wLS( x0, @g, @gGrad, proxth, 'h', @h, ...
-        't0', t, 'N', nIter, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
+      [recon,oValues] = fista_wLS( x0, @g, @gGrad, @proxth, 'h', @h, ...
+        't0', t, 'N', nIter, 'restart', true, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
     else
       %recon = fista( x0, @g, @gGrad, proxth );   %#ok<UNRCH>
-      recon = fista_wLS( x0, @g, @gGrad, proxth, 't0', t, 'N', nIter, ...
-        'verbose', verbose, 'printEvery', printEvery );
+      recon = fista_wLS( x0, @g, @gGrad, @proxth, 't0', t, 'N', nIter, ...
+        'restart', true, 'verbose', verbose, 'printEvery', printEvery );
     end
 
-  else
-    recon = lsqr( @applyA, b, [], [], [], [], x0(:) );
-
-  end
+  %else
+  %  recon = lsqr( @applyA, b, [], [], [], [], x0(:) );
+  %end
 
 end
 
@@ -327,5 +322,32 @@ function out = csReconFISTA_checkAdjoints( samples, W, WT, F, Fadj, A, Aadj )
   if checkAdjoint( imgRand, A, Aadj ) ~= true, error( 'Aadj is not the adjoint of A' ); end
 
   out = true;
+end
+
+
+function wavSplit = makeWavSplit( sImg )
+
+  minSplit = 8;
+
+  yTmp = sImg(1);
+  ySplitSize = 1;
+  while ( mod( yTmp, 1 ) == 0 )
+    ySplitSize = ySplitSize * 2;
+    yTmp = yTmp / 2;
+  end
+  ySplitSize = ySplitSize / 4;
+  ySplitSize = min( ySplitSize, minSplit );
+
+  xTmp = sImg(2);
+  xSplitSize = 1;
+  while ( mod( xTmp, 1 ) == 0 )
+    xSplitSize = xSplitSize * 2;
+    xTmp = xTmp / 2;
+  end
+  xSplitSize = xSplitSize / 4;
+  xSplitSize = min( xSplitSize, minSplit );
+
+  wavSplit = zeros( [ ySplitSize xSplitSize ] );
+  wavSplit(1) = 1;
 end
 

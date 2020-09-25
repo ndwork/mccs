@@ -1,6 +1,7 @@
 
 function [recon,senseMaps] = mri_nnSenseRecon( kData, lambda, varargin )
-  % [recon,senseMaps] = mri_nnSenseRecon( kData [, 'senseMaps', senseMaps, 'verbose', true/false ] )
+  % [recon,senseMaps] = mri_nnSenseRecon( kData [, 'mask', mask, ...
+  %   'senseMaps', senseMaps, 'verbose', true/false ] )
   %
   % Inputs:
   % kData is an array of size ( Ny, Nx, nSlices, nCoils ) of kSpace values
@@ -20,8 +21,8 @@ function [recon,senseMaps] = mri_nnSenseRecon( kData, lambda, varargin )
   senseMaps = p.Results.senseMaps;
   verbose = p.Results.verbose;
 
-  mask = mri_makeIntensityMask( kData );
   if numel( senseMaps ) == 0
+    mask = mri_makeIntensityMask( kData );
     senseMaps = mri_makeSensitivityMaps( kData, 'mask', mask, 'verbose', verbose );
   end
 

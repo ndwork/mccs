@@ -1,5 +1,6 @@
 
-function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, varargin )
+function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, noiseCoords, ...
+  varargin )
   % recon = mri_mccsRecon( kData, lambda [, 'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov ] )
   %
   % Inputs:
@@ -27,100 +28,92 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   p.addRequired( 'kData', @isnumeric );
   p.addRequired( 'lambda_x', @(x) numel(x) == 1 && x >= 0 );
   p.addRequired( 'lambda_s', @(x) numel(x) == 1 && x >= 0 );
+  p.addRequired( 'lambda_h', @(x) numel(x) == 1 && x >= 0 );
   p.addParameter( 'doCheckAdjoint', false, @islogical );
-  p.addParameter( 'kcf', 0.0035, @(x) x >= 0 && numel(x) == 1 );
+  p.addParameter( 'kcf', 0.0035, @isnumeric );
   p.addParameter( 'maxOuterIter', 30, @ispositive );
+  p.addParameter( 'nReconIter', 30, @ispositive );
+  p.addParameter( 'nSenseMapsIter', 90, @ispositive );
   p.addParameter( 'noiseCov', [], @isnumeric );
   p.addParameter( 'outDir', './out', @(x) true );
   p.addParameter( 'range', [], @isnumeric );
   p.addParameter( 'showScale', 2, @ispositive );
   p.addParameter( 'verbose', false, @islogical );
-  p.parse( kData, lambda_x, lambda_s, varargin{:} );
+  p.parse( kData, lambda_x, lambda_s, lambda_h, varargin{:} );
   doCheckAdjoint = p.Results.doCheckAdjoint;
   kcf = p.Results.kcf;
   maxOuterIter = p.Results.maxOuterIter;
+  nReconIter = p.Results.nReconIter;
+  nSenseMapsIter = p.Results.nSenseMapsIter;
   noiseCov = p.Results.noiseCov;
   outDir = p.Results.outDir;
   range = p.Results.range;
   showScale = p.Results.showScale;
   verbose = p.Results.verbose;
 
-  ssqRecon = mri_ssqRecon( kData );  % (Ny, Nx, nSlices, nCoils )
+  ssqRecon = mri_ssqRecon( kData, 'multiSlice', true );  % (Ny, Nx, nSlices, nCoils )
   recon = ssqRecon;
-  %sakeEspiritL1Recon = sakeRecon2D( kData, 'type', 'espiritL1' );  % (Ny, Nx, nSlices, nCoils )
-  %recon = sakeEspiritL1Recon;
 
-  [ Ny, Nx ] = size( recon );
-  nPix = Ny * Nx;
+  senseMaps = mccs_makeInitialSensitivityMap( kData, noiseCoords, kcf );
 
   if verbose == true && ~exist( outDir, 'dir' ), mkdir( outDir ); end
 
-  roughMaps = mccs_makeInitialSensitivityMap( kData );
-  %roughMaps = mri_makeSensitivityMaps( kData );
-  senseMaps = roughMaps;
-
-  % Check to see if there was previous processing to take advantage of
-  if exist( [outDir, '/mat_recon.mat'], 'file' )
-    load( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
-    senseIter = iter;
-    load( [outDir, '/mat_recon.mat'], 'recon', 'iter' );
-    if iter ~= senseIter, error( 'Something went wrong with saving' ); end
-  else
-    iter = 1;
-  end
-  
   if verbose == true
+    if numel( outDir ) > 0
+      fftRecons = mri_fftRecon( kData, 'multiSlice', true );
+      fftReconsFig = figure;
+      showImageCube( abs( squeeze( fftRecons ) ), 3 );
+      saveas( fftReconsFig, [outDir, '/fftRecons.jpg'] );
+      close( fftReconsFig );
+    end
+
     mapsFig = figure;
+    reconMapsFig = figure;
     senseReconsFig = figure;
     reconFig = figure;
-    if iter ~= 1
-      logID = fopen( [outDir, '/mccs.log' ], 'a' );
-    else
-      logID = fopen( [outDir, '/mccs.log' ], 'w' );
-    end
+    logID = fopen( [outDir, '/mccs.log' ], 'w' );
     fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMag\n' );
   end
-  
 
-  while iter < maxOuterIter
+  iter = 1;
+  [ Ny, Nx, nSlices, nCoils ] = size( kData );
+  while iter <= maxOuterIter
     disp([ 'Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
 
     % Determine the sensitivity maps
     senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lambda_h, ...
-      'initialGuess', senseMaps, 'noiseCov', noiseCov, 'maxIterOpt', 90, ...
+      'initialGuess', senseMaps, 'noiseCov', noiseCov, 'maxIterOpt', nSenseMapsIter, ...
       'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint );
+    reconSenseMaps = cropData( senseMaps, [ Ny Nx nSlices nCoils ] );
 
     if verbose == true
       figure( mapsFig );  showImageCube( abs( senseMaps ), showScale );
       if numel( outDir ) > 0
-        saveas( mapsFig, [outDir, '/senseMaps_', indx2str(iter,maxOuterIter), '.png'] );
-        if mod( iter, 10 ) == 0
-          save( [outDir, '/mat_senseMaps_', indx2str(iter,maxOuterIter), '.mat'], 'senseMaps' );
-        end
+        saveas( mapsFig, [outDir, '/senseMaps_', indx2str(iter,maxOuterIter), '.jpg'] );
       end
 
-      senseRecons = bsxfun( @times, senseMaps, recon );
-      figure( senseReconsFig );  showImageCube( abs(senseRecons), showScale );
+      figure( reconMapsFig );  showImageCube( abs( reconSenseMaps ), showScale );
       if numel( outDir ) > 0
-        saveas( senseReconsFig, [outDir, '/senseRecons_', indx2str(iter,maxOuterIter), '.png'] );
+        saveas( reconMapsFig, [outDir, '/reconSenseMaps_', indx2str(iter,maxOuterIter), '.jpg'] );
       end
     end
 
     % Estimate the reconstructed image
-    recon = mri_csReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda_x*nPix, ...
-      'nIter', 30, 'initialGuess', recon, 'noiseCov', noiseCov, 'verbose', verbose );
+    recon = mri_csReconFISTA_multiCoilMultiSlice( kData, reconSenseMaps, lambda_x, ...
+      'nIter', nReconIter, 'initialGuess', recon, 'noiseCov', noiseCov, 'verbose', verbose );
 
     maxAbsRecon = max( abs( recon(:) ) );
     if verbose == true
+      senseRecons = bsxfun( @times, reconSenseMaps, recon );
+      figure( senseReconsFig );  showImageCube( abs(senseRecons), showScale );
+      if numel( outDir ) > 0
+        saveas( senseReconsFig, [outDir, '/senseRecons_', indx2str(iter,maxOuterIter), '.png'] );
+      end
+
       figure( reconFig ); imshowscale( abs(recon), showScale, 'range', range );
       titlenice([ 'recon ', num2str(iter) ]);  drawnow;
       if numel( outDir ) > 0
         saveas( reconFig, [outDir, '/recon_', indx2str(iter,maxOuterIter), '.png'] );
-        save( [outDir, '/mat_senseMaps.mat'], 'senseMaps', 'iter' );
-        save( [outDir, '/mat_recon.mat'], 'recon', 'iter' );
-        if mod( iter, 10 ) == 0
-          save( [outDir, '/mat_recon_', indx2str(iter,maxOuterIter), '.mat'], 'recon' );
-        end
       end
 
       % Calculate image statistics
@@ -144,6 +137,6 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
     iter = iter + 1;
   end
 
+  senseMaps = reconSenseMaps;
 end
-
 

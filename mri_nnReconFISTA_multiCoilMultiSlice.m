@@ -48,7 +48,8 @@ function recon = mri_nnReconFISTA_multiCoilMultiSlice( kData, senseMaps, lambda,
 
   slices = cell( nSlices, 1 );
   parforObj = parforProgress( nSlices );
-  parfor sliceIndx = 1 : nSlices
+  %parfor sliceIndx = 1 : nSlices
+for sliceIndx = 1 : nSlices
     parforObj.progress( sliceIndx );   %#ok<PFBNS>
     % TODO: parallelize this loop
     kData4Slice = squeeze( kData(:,:,sliceIndx,:) );

@@ -4,9 +4,11 @@ function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTi
   p = inputParser;
   p.addOptional( 'trueRecon', [], @isnumeric );
   p.addParameter( 'senseMaps', [], @isnumeric );
+  p.addParameter( 'showScale', 3, @ispositive );
   p.parse( varargin{:} );
   trueRecon = p.Results.trueRecon;
   senseMaps = p.Results.senseMaps;
+  showScale = p.Results.showScale;
 
   if max( abs( recon(:) ) ) == 0
     normAbsRecon = recon;
@@ -25,25 +27,39 @@ function printMetrics( logFile, datacase, sampleFraction, nSamples, recon, imgTi
   end
 
   if numel( trueRecon ) > 0
-    mse = norm( abs(recon(:)) - abs( trueRecon(:) ), 2 ).^2 / numel( recon );
+    absRecon = abs( recon );
+    absTrueRecon = abs( trueRecon );
+    absUnitRecon = absRecon / max( absRecon(:) );
+    errImg = absUnitRecon - absTrueRecon;
+    errFig = figure;  imshowscale( abs(errImg), showScale, 'range', [0 1] );
+    title( [ imgTitle, ' absErr' ] );
+    saveas( errFig, [ outDir, '/err_', imgTitle, '.png' ] ); close( errFig );
+    mse = norm( abs( errImg(:) ), 2 ).^2 / numel( recon );
+    mae = sum( abs( errImg(:) ) ) / numel( recon );  % mean absolute error
+    correlation = dotP( absUnitRecon, absTrueRecon ) / ...
+      norm( absUnitRecon(:) ) / norm( absTrueRecon(:) );
+    angleErr = acos( correlation );
   else
     mse = -1;
+    mae = -1;
+    angleErr = -1;
   end
 
   logID = fopen( logFile, 'a' );
-  fprintf( logID, ['%d, %f, %d, ', imgTitle, ', %f, %f, %f, %f, %f \n'], ...
-    datacase, sampleFraction, nSamples, mdmScore, mdmScore2, niqeScore, piqeScore, mse );
+  fprintf( logID, ['%d, %f, %d, ', imgTitle, ', %f, %f, %f, %f, %f, %f, %f, %f \n'], ...
+    datacase, sampleFraction, nSamples, mdmScore, mdmScore2, niqeScore, piqeScore, ...
+    mse, mae, correlation, angleErr );
   fclose( logID );
 
-  figH = figure; imshowscale( abs(recon), 5 );  title( imgTitle );
+  figH = figure; imshowscale( abs(recon), showScale );  title( imgTitle );
   saveas( figH, [ outDir, '/recon_', imgTitle, '.png' ] );  close( figH );
 
   if numel( senseMaps ) > 0
-    mapsFig = figure;  showImageCube( abs( senseMaps ), 5 );
+    mapsFig = figure;  showImageCube( abs( senseMaps ), showScale );
     saveas( mapsFig, [outDir, '/senseMaps_', imgTitle, '.png'] );  close( mapsFig );
 
     senseRecons = bsxfun( @times, senseMaps, recon );
-    senseReconsFig = figure;  showImageCube( abs(senseRecons), 5 );
+    senseReconsFig = figure;  showImageCube( abs(senseRecons), showScale );
     saveas( senseReconsFig, [outDir, '/senseRecons_', imgTitle, '.png'] );
     close( senseReconsFig );
 

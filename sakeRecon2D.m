@@ -29,8 +29,7 @@ function out = sakeRecon2D( kData, varargin )
   nSlices = size( kData, 3 );
 
   out = cell( 1, 1, nSlices );
-  %parfor sliceIndx = 1 : nSlices
-for sliceIndx = 1 : nSlices
+  parfor sliceIndx = 1 : nSlices
     out{1,1,sliceIndx} = sakeReconSlice( squeeze( kData(:,:,sliceIndx,:) ), type );   %#ok<PFBNS>
   end
   out = cell2mat( out );

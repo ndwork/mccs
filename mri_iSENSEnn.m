@@ -38,7 +38,7 @@ function [recon,senseMaps] = mri_iSENSEnn( kData, lambda_x, lambda_s, varargin )
 
   if verbose == true && ~exist( outDir, 'dir' ), mkdir( outDir ); end
 
-  roughMaps = mccs_makeInitialSensitivityMap( kData );
+  roughMaps = iSENSEnn_makeInitialSensitivityMap( kData );
   senseMaps = roughMaps;
 
   if verbose == true
@@ -83,6 +83,23 @@ function [recon,senseMaps] = mri_iSENSEnn( kData, lambda_x, lambda_s, varargin )
     end
   end
 
+end
+
+
+
+
+
+function senseMaps = iSENSEnn_makeInitialSensitivityMap( kData )
+
+  sKData = size( kData );
+  nSamples = sKData(1) * sKData(2);
+
+  shiftedRecons = sqrt( nSamples ) * ifftc( ifftc( kData, 1 ), 2 );
+  coilRecons = fftshift( fftshift( shiftedRecons, 1 ), 2 );
+
+  ssqRecon = norms( coilRecons, 2, 4 );
+
+  senseMaps = bsxfun( @rdivide, coilRecons, ssqRecon );
 end
 
 
