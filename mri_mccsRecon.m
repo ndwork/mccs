@@ -7,6 +7,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   % kData is an array of size ( Ny, Nx, nSlices, nCoils ) of kSpace values
   % lambda_x - regularization parameter for compressed sensing reconstruction
   % lambda_s - regularization parameter for determining sensitivity maps
+  % lambda_h - regularization parameter for high frequencies
   %
   % Optional Inputs:
   % maxOuterIter - scalar specifying the number of outer iterations
@@ -78,7 +79,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   iter = 1;
   [ Ny, Nx, nSlices, nCoils ] = size( kData );
   while iter <= maxOuterIter
-    disp([ 'Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
+    disp([ 'mri_mccsRecon:  Working on iteration ', num2str(iter), ' of ', num2str(maxOuterIter) ]);
 
     % Determine the sensitivity maps
     senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, lambda_h, ...
