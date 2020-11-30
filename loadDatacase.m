@@ -33,11 +33,18 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
   lambda_iSENSEnn_s = 1d-2;
   lambda_csSENSE = lambda_iSENSEnn_x;
   lambda_nnSENSE = lambda_iSENSEnn_x;
+lambda_iSENSEnn_x = 1d-8;
+lambda_iSENSEnn_s = 1d-7;
+lambda_csSENSE = lambda_iSENSEnn_x;
+lambda_nnSENSE = lambda_iSENSEnn_x;
 
   kcf = 0.005;
   lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
   lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
   lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+lambda_xs = 1d-15 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
 
   trueRecon = [];
 
@@ -56,14 +63,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_csSENSE = 1d-4;
       lambda_iSENSEnn_x = 2d-3;
       lambda_iSENSEnn_s = 1d-5;
-
-      %noiseCoords = [ 1 1 25 25 ];
-      %lambda_xs = 1d-7 * ones( numel( sampleFractions ), 1 );
-      %lambda_ss = 1d-6 * ones( numel( sampleFractions ), 1 );
-      %lambda_hs = 1d1 * ones( numel( sampleFractions ), 1 );
-      %lambda_csSENSE = 1d-4;
-      %lambda_iSENSEnn_x = 2d-3;
-      %lambda_iSENSEnn_s = 1d-5;
+lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-6 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_csSENSE = 1d-9;
+lambda_iSENSEnn_x = 2d-8;
+lambda_iSENSEnn_s = 1d-10;
 
     case 1
       if loadData == true
@@ -77,9 +82,15 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_xs = 1d-8 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+lambda_xs = 1d-13 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
       lambda_csSENSE = 1d-4;
+lambda_csSENSE = 1d-9;
       lambda_iSENSEnn_x = 2d-3;  % 1d-3 does almost nothing
       lambda_iSENSEnn_s = 1d-5;  % 1d-2, 1d-5 is too much;  1d-3, 1d-4 is too much
+lambda_iSENSEnn_x = 2d-8;  % 1d-3 does almost nothing
+lambda_iSENSEnn_s = 1d-10;  % 1d-2, 1d-5 is too much;  1d-3, 1d-4 is too much
 
     case 2
       if loadData == true
@@ -96,6 +107,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_iSENSEnn_x = 2d-3;
       lambda_iSENSEnn_s = 1d-5;  %1d-4 is too high, 1d-5 does almost nothing
       lambda_csSENSE = 1d-4;
+lambda_xs = 1d-15 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-8 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 2d-8;
+lambda_iSENSEnn_s = 1d-10;  %1d-4 is too high, 1d-5 does almost nothing
+lambda_csSENSE = 1d-9;
 
     case 3
       if loadData == true
@@ -109,6 +126,11 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
       lambda_iSENSEnn_x = 1d-7;
       lambda_iSENSEnn_s = 1d-6;
+lambda_xs = 1d-14 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-12;
+lambda_iSENSEnn_s = 1d-11;
 
     case 4
       if loadData == true
@@ -130,6 +152,9 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
 
     case 6
       % FOV 25.6 cm, 256 x 256 (1mm in plane, 1mm thick slices)
@@ -144,6 +169,9 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d1 * ones( numel( sampleFractions ), 1 );
+lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-4 * ones( numel( sampleFractions ), 1 );
 
     case 7
       % FOV 20.5, 256 x 256 (0.8mm in plane, 0.8mm thick slices)
@@ -160,6 +188,11 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
       lambda_iSENSEnn_x = 1d-3;
       lambda_iSENSEnn_s = 1d-2;
+lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-8;
+lambda_iSENSEnn_s = 1d-7;
 
     case 8
       % FOV 20 cm, 400 x 400 (0.5mm in plane, 0.5mm thick slices)
@@ -177,6 +210,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_iSENSEnn_x = 1d-4;
       lambda_iSENSEnn_s = 1d-3;
       lambda_nnSENSE = 1d-2;
+lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-9;
+lambda_iSENSEnn_s = 1d-8;
+lambda_nnSENSE = 1d-7;
 
     case 9
       % Ankle, 256 x 256
@@ -194,6 +233,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_iSENSEnn_x = 1d-7;
       lambda_iSENSEnn_s = 1d-6;
       lambda_nnSENSE = 1d-2;
+lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-8 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-12;
+lambda_iSENSEnn_s = 1d-11;
+lambda_nnSENSE = 1d-7;
 
     case 10
       % shoulder, 
@@ -211,6 +256,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_iSENSEnn_x = 1d-7;
       lambda_iSENSEnn_s = 1d-6;
       lambda_nnSENSE = 1d-3;
+lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-9 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-12;
+lambda_iSENSEnn_s = 1d-11;
+lambda_nnSENSE = 1d-8;
 
     case 11
       % Ankle, 256 x 256
@@ -228,6 +279,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
       lambda_iSENSEnn_x = 1d-7;
       lambda_iSENSEnn_s = 1d-5;
       lambda_nnSENSE = 1d-2;
+lambda_xs = 1d-11 * ones( numel( sampleFractions ), 1 );
+lambda_ss = 1d-10 * ones( numel( sampleFractions ), 1 );
+lambda_hs = 1d-3 * ones( numel( sampleFractions ), 1 );
+lambda_iSENSEnn_x = 1d-12;
+lambda_iSENSEnn_s = 1d-10;
+lambda_nnSENSE = 1d-7;
 
     otherwise
       error( 'This datacase doesn''t exist' );
