@@ -94,7 +94,7 @@ function senseMaps = iSENSEnn_makeInitialSensitivityMap( kData )
   sKData = size( kData );
   nSamples = sKData(1) * sKData(2);
 
-  shiftedRecons = sqrt( nSamples ) * ifftc( ifftc( kData, 1 ), 2 );
+  shiftedRecons = sqrt( nSamples ) * ifft( ifft( kData, [], 1 ), [], 2 );
   coilRecons = fftshift( fftshift( shiftedRecons, 1 ), 2 );
 
   ssqRecon = norms( coilRecons, 2, 4 );
