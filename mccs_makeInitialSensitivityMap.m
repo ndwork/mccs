@@ -11,7 +11,7 @@ function senseMaps = mccs_makeInitialSensitivityMap( kData, varargin )
   sKData = size( kData );
   nSamples = sKData(1) * sKData(2);
 
-  shiftedRecons = sqrt( nSamples ) * ifftc( ifftc( kData, 1 ), 2 );
+  shiftedRecons = sqrt( nSamples ) * ifft( ifft( kData, [], 1 ), [], 2 );
   coilRecons = fftshift( fftshift( shiftedRecons, 1 ), 2 );
   nSlices = size( coilRecons, 3 );
   nCoils = size( coilRecons, 4 );
