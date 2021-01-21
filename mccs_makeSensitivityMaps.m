@@ -192,7 +192,7 @@ function senseMaps = mccs_makeSensitivityMaps( recon, kData, kcf, lambda_s, ...
     y3 = y( nb + nHighFreq + 1 : nb + nHighFreq + 4*nPix*nCoils );
 
     out1 = ( y1 - t * LStarb(:) ) ./ ( t + 1 );
-    out2 = y2 ./ ( t + 1 );
+    out2 = y2 ./ ( t + 1 );    
     out3 = softThresh( y3, t );
 
     out = [ out1(:); out2(:); out3(:); ];
