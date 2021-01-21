@@ -12,25 +12,25 @@ function coils = makeBirdcageCoils( varargin )
 
   p = inputParser;
   p.addParameter( 'nCoils', 8, @ispositive );
-  p.addParameter( 'R', 0.3, @ispositive );
-  p.addParameter( 'L', 0.05, @ispositive );
+  p.addParameter( 'radius', 0.3, @ispositive );
+  p.addParameter( 'length', 0.05, @ispositive );
   p.parse( varargin{:} );
   nCoils = p.Results.nCoils;
-  R = p.Results.R;
-  L = p.Results.L;
+  radius = p.Results.radius;
+  length = p.Results.length;
 
   coilAngles = 0 : 2 * pi / nCoils : 2*pi;
   coilAngles = coilAngles(1:nCoils) + coilAngles(2)/2;
 
-  cw = 2 * pi * R / nCoils;  % coil width
+  cw = 2 * pi * radius / nCoils;  % coil width
 
-  coil = [ [ 0; -0.5 * cw; -0.5 * L; ] ...
-           [ 0;  0.5 * cw; -0.5 * L; ] ...
-           [ 0;  0.5 * cw;  0.5 * L; ] ...
-           [ 0; -0.5 * cw;  0.5 * L; ] ...
-           [ 0; -0.5 * cw; -0.5 * L; ] ];
+  coil = [ [ 0; -0.5 * cw; -0.5 * length; ] ...
+           [ 0;  0.5 * cw; -0.5 * length; ] ...
+           [ 0;  0.5 * cw;  0.5 * length; ] ...
+           [ 0; -0.5 * cw;  0.5 * length; ] ...
+           [ 0; -0.5 * cw; -0.5 * length; ] ];
 
-  translation = [ R; 0; 0; ];  % Translation
+  translation = [ radius; 0; 0; ];  % Translation
   coil = bsxfun( @plus, coil, translation );
 
   coils = cell( nCoils, 1 );
