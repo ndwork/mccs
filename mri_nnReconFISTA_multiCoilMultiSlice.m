@@ -129,7 +129,7 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
     end
   end
 
-  [ Nx, Ny, nCoils ] = size( samples );
+  [ Nx, Ny, nCoils ] = size( samples );   %#ok<ASGLU>
   M = ( sum( abs(samples), 3 ) ~= 0 );
   nSamples = Nx * Ny;  % Note that A is square
 
@@ -141,57 +141,42 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
   % gGrad = A' A x - A' b;
 
   function out = F( x )
-    Fx = 1/sqrt(nSamples) .* fftshift( fft2( ifftshift( ...
-      x(:,:,1) + 1i * x(:,:,2) ) ) );
-    out = cat( 3, real(Fx), imag(Fx) );
+    out = (1/sqrt(nSamples)) * fftshift( fftshift( fft( fft( ...
+      ifftshift( ifftshift( x, 1 ), 2 ), [], 1 ), [], 2 ), 1 ), 2 );
   end
 
   function out = Fadj( y )
-    Fadjy = sqrt(nSamples) * ...
-      fftshift( ifft2( ifftshift( y(:,:,1) + 1i * y(:,:,2) ) ) );
-    out = cat( 3, real(Fadjy), imag(Fadjy) );
+    out = sqrt(nSamples) * fftshift( fftshift( ifft( ifft( ...
+      ifftshift( ifftshift( y, 1 ), 2 ), [], 1 ), [], 2 ), 1 ), 2 );
   end
 
-  M2 = cat( 3, M, M );
-
   function out = A( x )
-    out = zeros([ Nx Ny nCoils 2]);
-    xComplex = x(:,:,1) + 1i * x(:,:,2);
-    for coilIndx = 1 : nCoils
-      Sx = senseMaps(:,:,coilIndx) .* xComplex;
-      Sx = cat( 3, real(Sx), imag(Sx) );
-      MFSx = M2 .* F( Sx );
-      out(:,:,coilIndx,1) = MFSx(:,:,1);
-      out(:,:,coilIndx,2) = MFSx(:,:,2);
-    end
+    Sx = bsxfun( @times, senseMaps, x );
+    FSx = F( Sx );
+    out = bsxfun( @times, FSx, M );
   end
 
   function out = Aadj( y )
-    out = zeros([ Nx Ny ]);
-    for coilIndx = 1 : nCoils
-      My = M2 .* squeeze( y(:,:,coilIndx,:) );
-      FadjMy = Fadj( My );
-      FadjMy = FadjMy(:,:,1) + 1i * FadjMy(:,:,2);
-      sAdjFadjMy = conj(senseMaps(:,:,coilIndx)) .* FadjMy;
-      out = out + sAdjFadjMy;
-    end
-    out = cat( 3, real(out), imag(out) );
+    My = bsxfun( @times, y, M );
+    FadjMy = Fadj( My );
+    sAdjFadjMy = conj( senseMaps ) .* FadjMy;
+    out = sum( sAdjFadjMy, 3 );
   end
 
   function out = applyA( x, type )
     if nargin < 2, type = 'notransp'; end
 
     if strcmp( type, 'notransp' )
-      x = reshape( x, [Nx Ny 2] );
+      x = reshape( x, [ Ny Nx ] );
       out = A( x );
     else
-      x = reshape( x, [Nx, Ny, nCoils, 2] );
+      x = reshape( x, size( kData ) );
       out = Aadj( x );
     end
     out = out(:);
   end
 
-  b = cat( 4, real(samples), imag(samples) );
+  b = samples;
   function out = g( x )
     Ax = A( x );
     diff = Ax - b;
@@ -210,29 +195,24 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
   end
 
   function out = proxth( x, t )
-    xImg = reshape( x(:,:,1), [ Nx Ny ] ) + 1i * reshape( x(:,:,2), [ Nx Ny ] );
-    nn = proxNucNorm( xImg, t * lambda );
-    out = cat( 3, real( nn ), imag( nn ) );
+    out = proxNucNorm( x, t * lambda );
   end
 
   function out = h( x )
-    xImg = reshape( x(:,:,1), [ Nx Ny ] ) + 1i * reshape( x(:,:,2), [ Nx Ny ] );
-    out = lambda * nucNorm( xImg );
+    out = lambda * nucNorm( x );
   end
 
   if numel( reconGuess ) == 0
-    x0 = zeros( Nx, Ny, 2 );
-    ssqRecon = mri_ssqRecon( samples );
-    x0(:,:,1) = sqrt( ssqRecon );
+    x0 = mri_ssqRecon( samples );
   else
-    x0 = cat( 3, real(reconGuess), imag(reconGuess) );
+    x0 = reconGuess;
   end
 
   if lambda > 0
     t = 1;
     if debug
       %[recon,oValues] = fista( x0, @g, @gGrad, proxth, 'h', @h, 'verbose', verbose );   %#ok<ASGLU>
-      [recon,oValues] = fista_wLS( x0, @g, @gGrad, proxth, 'h', @h, ...
+      [recon,oValues] = fista_wLS( x0, @g, @gGrad, @proxth, 'h', @h, ...
         't0', t, 'N', nIter, 'verbose', true, 'printEvery', printEvery );   %#ok<ASGLU>
     else
       %recon = fista( x0, @g, @gGrad, proxth );   %#ok<UNRCH>
@@ -246,21 +226,20 @@ function recon = nnReconFISTA_slice( samples, senseMaps, lambda, varargin )
     recon = reshape( recon, [Ny Nx 2] );
 
   end
-
-  recon = recon(:,:,1) + 1i * recon(:,:,2);
 end
 
 
 function out = nnReconFISTA_checkAdjoints( samples, F, Fadj, A, Aadj )
 
   sSamples = size( samples );
-  imgRand = rand( [ sSamples(1:2) 2 ] );
 
-  if checkAdjoint( imgRand, F, Fadj ) ~= true
+  tmp = rand( sSamples );
+  if checkAdjoint( tmp, F, Fadj ) ~= true
     error( 'Fadj is not the adjoint of F' );
   end
 
-  if checkAdjoint( imgRand, A, Aadj ) ~= true
+  tmp = rand( sSamples(1:2) );
+  if checkAdjoint( tmp, A, Aadj ) ~= true
     error( 'Aadj is not the adjoint of A' );
   end
 
