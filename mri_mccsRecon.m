@@ -1,5 +1,5 @@
 
-function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, noiseCoords, ...
+function [recon,reconSenseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h, noiseCoords, ...
   varargin )
   % recon = mri_mccsRecon( kData, lambda [, 'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov ] )
   %
@@ -39,7 +39,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
   p.addParameter( 'outDir', './out', @(x) true );
   p.addParameter( 'range', [], @isnumeric );
   p.addParameter( 'showScale', 2, @ispositive );
-  p.addParameter( 'verbose', false, @islogical );
+  p.addParameter( 'verbose', true, @islogical );
   p.parse( kData, lambda_x, lambda_s, lambda_h, varargin{:} );
   doCheckAdjoint = p.Results.doCheckAdjoint;
   kcf = p.Results.kcf;
@@ -57,7 +57,7 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
 
   senseMaps = mccs_makeInitialSensitivityMap( kData, noiseCoords, kcf );
 
-  if verbose == true && ~exist( outDir, 'dir' ), mkdir( outDir ); end
+  if ~exist( outDir, 'dir' ), mkdir( outDir ); end
 
   if verbose == true
     if numel( outDir ) > 0
@@ -72,9 +72,9 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
     reconMapsFig = figure;
     senseReconsFig = figure;
     reconFig = figure;
-    logID = fopen( [outDir, '/mccs.log' ], 'w' );
-    fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMag\n' );
   end
+  logID = fopen( [outDir, '/mccs.log' ], 'w' );
+  fprintf( logID, 'mdm, mdm-2, niqe, piqe, maxSenseMapMag\n' );
 
   iter = 1;
   [ Ny, Nx, nSlices, nCoils ] = size( kData );
@@ -116,28 +116,27 @@ function [recon,senseMaps] = mri_mccsRecon( kData, lambda_x, lambda_s, lambda_h,
       if numel( outDir ) > 0
         saveas( reconFig, [outDir, '/recon_', indx2str(iter,maxOuterIter), '.png'] );
       end
-
-      % Calculate image statistics
-      maxSenseMapMag = max( abs( senseMaps(:) ) );
-      
-      % Calculate quality scores
-      if maxAbsRecon == 0
-        normAbsRecon = recon;
-      else
-        normAbsRecon = abs( recon ) / max( abs( recon(:) ) );
-      end
-      mdmScore = calcMdmMetric( normAbsRecon );
-      mdmScore2 = calcMdmMetric( 1-normAbsRecon );
-      niqeScore = niqe( normAbsRecon );
-      piqeScore = piqe( normAbsRecon );
-      fprintf( logID, '%f, %f, %f, %f, %f\n', mdmScore, mdmScore2, ...
-        niqeScore, piqeScore, maxSenseMapMag );
     end
+    % Calculate image statistics
+    maxSenseMapMag = max( abs( senseMaps(:) ) );
+
+    % Calculate quality scores
+    if maxAbsRecon == 0
+      normAbsRecon = recon;
+    else
+      normAbsRecon = abs( recon ) / max( abs( recon(:) ) );
+    end
+    mdmScore = calcMdmMetric( normAbsRecon );
+    mdmScore2 = calcMdmMetric( 1-normAbsRecon );
+    niqeScore = niqe( normAbsRecon );
+    piqeScore = piqe( normAbsRecon );
+    fprintf( logID, '%f, %f, %f, %f, %f\n', mdmScore, mdmScore2, ...
+      niqeScore, piqeScore, maxSenseMapMag );
+
     if maxAbsRecon == 0, return; end
 
     iter = iter + 1;
   end
 
-  senseMaps = reconSenseMaps;
 end
 
