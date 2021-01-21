@@ -97,8 +97,8 @@ function senseMaps = mri_iSENSEnn_makeSensitivityMaps( recon, kData, lambda_s, v
   end
 
   function out = Fadj( in )
-    tmp = ifftshift( ifftshift( in, 1 ), 2 );
-    out = sqrt( nPix ) * ifft( ifft( tmp, [], 1 ), [], 2 );
+    iShiftedIn = ifftshift( ifftshift( in, 1 ), 2 );
+    out = sqrt( nPix ) * ifft( ifft( iShiftedIn, [], 1 ), [], 2 );
     out = fftshift( fftshift( out, 1 ), 2 );
   end
 
