@@ -2,7 +2,7 @@
 function run_mri_mccsRecon
   close all; clear; rng(1);
 
-  datacases = [ 0, 1, 2, 6, 11, 5, 9, 3, 7, 8, 10 ];
+  datacases = [ 1, 0, 2, 6, 11, 5, 9, 3, 7, 8, 10 ];
   % Note, datacase 0 means simulation
 
   doCheckAdjoint = false;
