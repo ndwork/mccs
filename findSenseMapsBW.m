@@ -1,8 +1,9 @@
 
 function findSenseMapsBW
 
-  sImg = [ 8192 8192 ];  % size of resulting maps
+  sImg = [ 2048 2048 ];  % size of resulting maps
   res = 1.5d-3;  % resolution in meter per pixel
+  maskThresh = 0.1;
 
   % first coil is non-square from a birdcage coil according to 
   % "A fast and accurate simulator for the design of birdcage coils in MRI"
@@ -22,36 +23,37 @@ function findSenseMapsBW
   coilWidths(2) = 0.07;  % coil width in meters
 
   nCoils = numel( coilWidths );
-  xBWs = zeros( nCoils, 1 );
-  yBWs = zeros( nCoils, 1 );
+  BWs = zeros( nCoils, 1 );  % bandwidths
+
+  coords = size2imgCoordinates( sImg );
+  [ xLocs, yLocs ] = meshgrid( res * coords{2}, res * coords{1} );
+  locs = [ xLocs(:)  yLocs(:)  zeros(numel(yLocs),1) ];
+  fov = res * sImg;
+  kIndxs = size2imgCoordinates( sImg );
+  kys = kIndxs{1} / fov(1);  kxs = kIndxs{2} / fov(2);
+  [ kxLocs, kyLocs ] = meshgrid( kxs, kys );
+  freqMags = sqrt( kxLocs.^2 + kyLocs.^2 );
+
   for coilIndx = 1 : nCoils
     cw = coilWidths( coilIndx );
     cl = coilLengths( coilIndx );
     coil = [ [ -0.5 * cw; 0; -0.5 * cl; ] ...
-              [  0.5 * cw; 0; -0.5 * cl; ] ...
-              [  0.5 * cw; 0;  0.5 * cl; ] ...
-              [ -0.5 * cw; 0;  0.5 * cl; ] ...
-              [ -0.5 * cw; 0; -0.5 * cl; ] ];
+             [  0.5 * cw; 0; -0.5 * cl; ] ...
+             [  0.5 * cw; 0;  0.5 * cl; ] ...
+             [ -0.5 * cw; 0;  0.5 * cl; ] ...
+             [ -0.5 * cw; 0; -0.5 * cl; ] ];
     coil = coil';
 
-    coords = size2fftCoordinates( sImg );
-    [ xLocs, yLocs ] = meshgrid( sImg(2)*res * coords{2}, sImg(1)*res * coords{1} );
-    locs = [ xLocs(:)  yLocs(:)  zeros(numel(yLocs),1) ];
     tmp = mri_computeSensitivityBiotSavart( coil, locs );
     bsSensitivity = reshape( tmp, sImg );
     bsSpectrum = fftshift( ufft2( bsSensitivity ) );
-    fwtmMask = abs( bsSpectrum ) >= 0.1 * max( abs( bsSpectrum(:) ) );
-    ks = size2fftCoordinates( size( fwtmMask ) );
-    kys = ks{1};  kxs = ks{2};
-    [ kxLocs, kyLocs ] = meshgrid( kxs, kys );
-    yBW = max( kyLocs( fwtmMask > 0 ) ) / max( yLocs(:) );  % cycles / meter
-    xBW = max( kxLocs( fwtmMask > 0 ) ) / max( xLocs(:) );  % cycles / meter
-    
-    xBWs(coilIndx) = xBW;
-    yBWs(coilIndx) = yBW;
+    mtf = abs( bsSpectrum );
+    freqMask = mtf >= maskThresh * max( mtf(:) );
+
+    bw = max( freqMags( freqMask > 0 ) );
+    BWs( coilIndx ) = bw;
   end
 
-  disp( xBWs );
-  disp( yBWs );
+  disp( BWs );
 end
 
