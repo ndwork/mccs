@@ -1,6 +1,7 @@
 
 .DS_Store
 ESPIRiT/*
+.swp
 
 *.mat
 *.m~
