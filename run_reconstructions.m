@@ -2,12 +2,10 @@
 function run_reconstructions
   close all; clear; rng(1);
 
-  %datacases = [ 1, 0, 11, 2, 6, 5, 9, 3, 7, 8, 10 ];
-datacases = [ 6 5 9 ];
+  datacases = [ 1, 0, 11, 2, 6, 5, 9, 3, 7, 8 ];
   % Note, datacase 0 means simulation
 
-  %outDir = '/Users/ndwork/Desktop/mccsOut/';
-outDir = './out/';
+  outDir = './out/';
   doCheckAdjoint = false;
   simCase = 2;
   vdSigma = 0.3;
@@ -23,8 +21,7 @@ outDir = './out/';
     disp([ 'Working on datacase ', num2str( datacase ) ]);
 
     delete( gcp );
-    %parpool( 12 );
-parpool( 4 );
+    parpool( 16 );
 
     reconstructDatacase( datacase, sampleFractions, outDir, ...
       doCheckAdjoint, simCase, vdSigma, maxOuterIter, verbose );
@@ -40,13 +37,13 @@ function reconstructDatacase( datacase, sampleFractions, outDir, ...
     loadData = false;
     [ ~, noiseCoords, kcfs, res, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_xs, ...
       lambda_iSENSEnn_ss, lambda_sparseSENSEs, lambda_nnSENSEs, lambda_espiritL1s, ...
-      trueRecon ] = loadDatacase_new( datacase, sampleFractions, loadData, 'simCase', simCase );
+      trueRecon ] = loadDatacase( datacase, loadData, 'simCase', simCase );
     load( dataMatFile, 'sub_kData' );
   else
     loadData = true;
     [ sub_kData, noiseCoords, kcfs, res, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_xs, ...
       lambda_iSENSEnn_ss, lambda_sparseSENSEs, lambda_nnSENSEs, lambda_espiritL1s, ...
-      trueRecon ] = loadDatacase_new( datacase, sampleFractions, loadData, 'simCase', simCase );
+      trueRecon ] = loadDatacase( datacase, loadData, 'simCase', simCase );
     save( dataMatFile, 'sub_kData' );
   end
 
@@ -66,7 +63,7 @@ function reconstructDatacase( datacase, sampleFractions, outDir, ...
   logFile = [ datacaseDir, '/metrics.log' ];
   logID = fopen( logFile, 'w' );
   fprintf( logID, [ 'datacase, sampleFraction, nSamples, type, mdm, mdm-2, niqe, ', ...
-    'piqe, mse, mae, correlation, angleErr, mi \n' ] );
+    'piqe, mse, mae, ssim, correlation, angleErr, mi \n' ] );
   fclose( logID );
 
   mask = mri_makeIntensityMask( sub_kData );
@@ -184,7 +181,8 @@ function reconstructSampleFraction( logFile, datacase, datacaseDir, sampleFracti
           'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint );
       end
       printMetrics( logFile, datacase, sampleFraction, nSamples, iSENSEnn_Recon, 'iSENSEnn', ...
-        iSENSE_Dir, trueRecon, 'senseMaps', iSENSEnn_Maps );
+        iSENSE_Dir, trueRecon, 'senseMaps', iSENSEnn_Maps, 'optLogNames', { 'lambda_s', 'lambda_x' }, ...
+        'optLogValues', [ lambda_iSENSEnn_s, lambda_iSENSEnn_x ] );
     end
   end
   clear iSENSEnn_Recon iSENSEnn_Maps
@@ -220,7 +218,8 @@ function reconstructSampleFraction( logFile, datacase, datacaseDir, sampleFracti
         kData, 'type', 'espiritL1', 'lambda', lambda_espiritL1 );
     end
     printMetrics( logFile, datacase, sampleFraction, nSamples, sakeL1EspiritRecon, ...
-      'sakeL1Espirit', espiritL1Dir, trueRecon, 'senseMaps', sakeL1EspiritMaps );
+      'sakeL1Espirit', espiritL1Dir, trueRecon, 'senseMaps', sakeL1EspiritMaps, ...
+      'optLogNames', {'lambda_espiritL1'}, 'optLogValues', lambda_espiritL1 );
   end
   clear sakeL1EspiritRecon sakeL1EspiritMaps
 
@@ -254,7 +253,8 @@ function reconstructSampleFraction( logFile, datacase, datacaseDir, sampleFracti
         'senseMaps', sparseSenseMaps, 'verbose', verbose );
     end
     printMetrics( logFile, datacase, sampleFraction, nSamples, nnSenseRecon, 'nnSense', ...
-      nnSENSE_Dir, trueRecon, 'senseMaps', nnSenseMaps );
+      nnSENSE_Dir, trueRecon, 'senseMaps', nnSenseMaps, 'optLogNames', {'lambda_nnSENSE'}, ...
+      'optLogValues', lambda_nnSENSE );
     clear nnSenseRecon nnSenseMaps 
   end
   clear sparseSenseMaps
@@ -290,8 +290,11 @@ function runReconsMCCS( trueRecon, datacase, sampleFraction, nSamples, kData, kc
               'kcf', kcf, 'res', res, 'maxOuterIter', maxOuterIter, 'noiseCov', noiseCov, ...
               'verbose', verbose, 'doCheckAdjoint', doCheckAdjoint, 'outDir', mccsDir );
           end
+          optLogNames = { 'lambda_s', 'lambda_h', 'lambda_x' };
+          optLogValues = [ lambda_s, lambda_h, lambda_x ];
           printMetrics( logFile, datacase, sampleFraction, nSamples, mccsRecon, 'mccs', ...
-            mccsDir, trueRecon, 'senseMaps', mccsMaps );
+            mccsDir, trueRecon, 'senseMaps', mccsMaps, 'optLogNames', optLogNames, ...
+            'optLogValues', optLogValues );
           clear mccsRecon mccsMaps
         end
       end
