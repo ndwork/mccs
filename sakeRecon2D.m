@@ -1,6 +1,6 @@
 
 
-function out = sakeRecon2D( kData, varargin )
+function [out,maps] = sakeRecon2D( kData, varargin )
   % out = sakeRecon2D( kData [, 'type', type ] )
   %
   % Inputs:
@@ -19,8 +19,10 @@ function out = sakeRecon2D( kData, varargin )
   % purpose.
 
   p = inputParser;
+  p.addParameter( 'lambda', [], @isnumeric );
   p.addParameter( 'type', 'espirit', @(x) true );
   p.parse( varargin{:} );
+  lambda = p.Results.lambda;
   type = p.Results.type;
 
   origPath = path();
@@ -29,17 +31,25 @@ function out = sakeRecon2D( kData, varargin )
   nSlices = size( kData, 3 );
 
   out = cell( 1, 1, nSlices );
+  maps = cell( 1, 1, nSlices );
   parfor sliceIndx = 1 : nSlices
-    out{1,1,sliceIndx} = sakeReconSlice( squeeze( kData(:,:,sliceIndx,:) ), type );   %#ok<PFBNS>
+    [recon,map] = sakeReconSlice( squeeze( kData(:,:,sliceIndx,:) ), type, lambda );
+    out{1,1,sliceIndx} = recon;
+    maps{1,1,sliceIndx} = map;
   end
   out = cell2mat( out );
+  maps = cell2mat( maps );
 
   path( origPath );  % restore original path
 end
 
 
-function out = sakeReconSlice( kData, type )
+function [out,maps] = sakeReconSlice( kData, type, lambda )
   % Input: kData is [nx X ny X nc]
+
+  if nargin < 3 || numel( lambda ) == 0
+    lambda = 0.0025;  % L1-Wavelet threshold
+  end
 
   ncalib = 48;
   ksize = [6,6]; % ESPIRiT kernel-window-size
@@ -47,7 +57,6 @@ function out = sakeReconSlice( kData, type )
   wnthresh = 1.8; % Window-normalized number of singular values to threshold
   eigThresh_im = 0.9; % threshold of eigenvectors in image space
   splitWeight = 0.4;  % reasonable value
-  lambda = 0.0025;    % L1-Wavelet threshold
   nIterSplit = 15;    % number of splitting iterations for CS part
 
   [sx,sy,Nc] = size(kData);
@@ -86,11 +95,10 @@ function out = sakeReconSlice( kData, type )
     [~, out] = cgESPIRiT( kDataC, ESP, nIterCG, 0.01, kDataC*0 );
 
   elseif strcmp( type, 'espiritL1' )
-    XOP = Wavelet('Daubechies_TI',4,6);
+    XOP = Wavelet( 'Daubechies_TI', 4, 6 );
     FT = p2DFT( mask, [sx,sy,Nc] );
     tmp = zeros( size( kDataC, 1 ), size( kDataC, 2 ), 2 );
     out = cgL1ESPIRiT( kDataC, tmp, FT, ESP, nIterCG, XOP, lambda, splitWeight, nIterSplit );
-
   end
 
   out = out(:,:,2);
