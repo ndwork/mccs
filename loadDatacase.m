@@ -1,5 +1,5 @@
 
-function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_x, ...
+function [ data, noiseCoords, kcf, res, lambda_xs, lambda_ss, lambda_hs, lambda_iSENSEnn_x, ...
   lambda_iSENSEnn_s, lambda_csSENSE,lambda_nnSENSE, trueRecon ] = loadDatacase( ...
     datacase, sampleFractions, varargin )
   % Returns data in hybrid state
@@ -9,6 +9,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
   %
   % Ouptuts:
   % data - array of data in hybrid state
+  % res - the intended resolution corresponding to 0.5 in k-space
   % noiseCoords - [ minX minY maxX maxY ] specifying noise region in data
   %
   % Written by Nicholas Dwork, Copyright 2019
@@ -34,10 +35,12 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
   lambda_csSENSE = lambda_iSENSEnn_x;
   lambda_nnSENSE = lambda_iSENSEnn_x;
 
-  kcf = 0.005;
+  kcf = 9;  % 9 cycles per meter, determined by running findSenseMapsBW
+  res = 1d-3;  %#ok<NASGU>
+
   lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
   lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-  lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+  lambda_hs = 1d6 * ones( numel( sampleFractions ), 1 );
 
   trueRecon = [];
 
@@ -45,14 +48,13 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
 
     case 0
       % Simulated datacase
-      kcf = 0.002;
-
       [ data, trueRecon ] = loadSimData( simCase );
 
       noiseCoords = [ 1 1 25 25 ];
-      lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
-      lambda_ss = 1d-1 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+      res = 0.1d-3;  % meters per pixel
+      lambda_xs = 1d-9 * ones( numel( sampleFractions ), 1 );
+      lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d3 * ones( numel( sampleFractions ), 1 );
       lambda_csSENSE = 1d-4;
       lambda_iSENSEnn_x = 2d-3;
       lambda_iSENSEnn_s = 1d-5;
@@ -65,10 +67,10 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data( :, :, 4, : );
       end
       noiseCoords = [ 1 1 41 76 ];
-      kcf = 0.005;
+      res = 0.5d-3;  % meters per pixel
       lambda_xs = 1d-8 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
-      lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
+      lambda_hs = 1d8 * ones( numel( sampleFractions ), 1 );
       lambda_csSENSE = 1d-4;
       lambda_iSENSEnn_x = 2d-3;  % 1d-3 does almost nothing
       lambda_iSENSEnn_s = 1d-5;  % 1d-2, 1d-5 is too much;  1d-3, 1d-4 is too much
@@ -81,7 +83,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data( :, :, 4, : );
       end
       noiseCoords = [ 1 1 56 72 ];
-      kcf = 0.005;
+      res = 0.5d-3;  % meters per pixel
       lambda_xs = 1d-10 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -95,7 +97,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = permute( DATA, [1 2 4 3] );
       end
       noiseCoords = [ 1 1 35 32 ];
-      kcf = 0.006;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-9 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -108,6 +110,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = permute( DATA, [1 2 4 3] );
       end
       noiseCoords = [ 1 1 35 32 ];
+      res = 1.0d-3;  % meters per pixel
 
     case 5
       % FOV 25.6 cm, 256 x 256 (1mm in plane, 1.5mm thick slices)
@@ -118,7 +121,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,64,:);
       end
       noiseCoords = [ 1 1 50 50 ];
-      kcf = 0.003;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -132,7 +135,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,64,:);
       end
       noiseCoords = [ 1 1 50 50 ];
-      kcf = 0.004;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d1 * ones( numel( sampleFractions ), 1 );
@@ -146,7 +149,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,64,:);
       end
       noiseCoords = [ 1 1 45 45 ];
-      kcf = 0.008;
+      res = 0.8d-3;  % meters per pixel
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -162,7 +165,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,64,:);
       end
       noiseCoords = [ 1 1 70 70 ];
-      kcf = 0.005;
+      res = 0.5d-3;  % meters per pixel
       lambda_xs = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -179,7 +182,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,80,:);
       end
       noiseCoords = [ 10 10 80 80 ];
-      kcf = 0.005;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-3 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -196,7 +199,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,245,:);
       end
       noiseCoords = [ 10 10 60 60 ];
-      kcf = 0.005;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-4 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
@@ -213,7 +216,7 @@ function [ data, noiseCoords, kcf, lambda_xs, lambda_ss, lambda_hs, lambda_iSENS
         data = data(:,:,50,:);
       end
       noiseCoords = [ 10 10 100 100 ];
-      kcf = 0.005;
+      res = 1.0d-3;  % meters per pixel
       lambda_xs = 1d-6 * ones( numel( sampleFractions ), 1 );
       lambda_ss = 1d-5 * ones( numel( sampleFractions ), 1 );
       lambda_hs = 1d2 * ones( numel( sampleFractions ), 1 );
